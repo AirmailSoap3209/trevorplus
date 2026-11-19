@@ -115,3 +115,9 @@ top-face painting that cost most of the FPS.
 - `/tp` opens the menu; `/trevorplus` with no arguments opens the menu as well.
 - Command cleanup: grouped, coloured `/trevorplus help`; fix-up commands moved under `data` (`logdye`, `quests`,
   `counts`, `elusivegap`) and diagnostics under `debug` (`nametag`, `sidebar`, `sim`).
+
+## Milestone 9 – Auto-hide
+
+- All overlays (panels, direction line, alert banner, mob box, Theodolite blocks and rings) and sounds switch off after
+  one minute outside the Farming Islands, and return when you come back or a quest is active. Based on the sidebar zone;
+  if the sidebar never names a zone the overlays stay on. Toggle: settings menu or `/trevorplus autohide`.

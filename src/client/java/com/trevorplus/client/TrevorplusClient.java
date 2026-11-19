@@ -74,6 +74,8 @@ public class TrevorplusClient implements ClientModInitializer {
     private static KeyMapping uiKey;
     private static boolean openUi;
     private static Object lastLevel;
+    private static final com.trevorplus.quests.Presence presence = new com.trevorplus.quests.Presence();
+    private static volatile boolean overlaysOn = true;
     private static final AlertQueue alerts = new AlertQueue();
     private static final ShurikenReminder shuriken = new ShurikenReminder();
     private static final Interp playerInterp = new Interp();
@@ -167,9 +169,9 @@ public class TrevorplusClient implements ClientModInitializer {
             tell("Quest accepted automatically.");
         }
         MobFinder.keepGlow();
-        if (tickCount % 10 == 0) findMob(mc);
+        if (tickCount % 10 == 0) { if (overlaysOn) findMob(mc); else { MobFinder.clear(); lastTarget = null; } }
         if (tickCount % 20 == 7) {        // the block scan is the heavy part: once a second, and only with a hint
-            if (settings.blocksEnabled && engine.hints().hasY()) BlockHighlight.scan(mc, engine.hints(), settings.blocksRingFilter);
+            if (overlaysOn && settings.blocksEnabled && engine.hints().hasY()) BlockHighlight.scan(mc, engine.hints(), settings.blocksRingFilter);
             else BlockHighlight.clear();
         }
 
@@ -178,6 +180,8 @@ public class TrevorplusClient implements ClientModInitializer {
         engine.tick();
         List<String> lines = ScoreboardReader.sidebarLines(mc);
         currentZone = com.trevorplus.quests.ZoneReader.current(lines);
+        presence.update(nowMs(), currentZone, engine.tracker().isActive());
+        overlaysOn = !settings.autoHide || presence.show(nowMs());
         if (lines != null) {
             TrackerBoard.Result board = TrackerBoard.parse(lines);
             engine.onTrackerBoard(board.active(), board.area());
@@ -293,21 +297,21 @@ public class TrevorplusClient implements ClientModInitializer {
 
     private static void renderHud(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
-        if (!settings.hudVisible || mc.player == null || mc.gui.hud.isHidden() || mc.gui.screen() instanceof TrevorUiScreen) return;
+        if (!overlaysOn || !settings.hudVisible || mc.player == null || mc.gui.hud.isHidden() || mc.gui.screen() instanceof TrevorUiScreen) return;
         refreshCaches();
         HudPainter.draw(g, mc.font, hudCache, settings.hudX, settings.hudY, accent(), false);
     }
 
     private static void renderHud2(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
-        if (!settings.hud2Visible || mc.player == null || mc.gui.hud.isHidden() || mc.gui.screen() instanceof TrevorUiScreen) return;
+        if (!overlaysOn || !settings.hud2Visible || mc.player == null || mc.gui.hud.isHidden() || mc.gui.screen() instanceof TrevorUiScreen) return;
         refreshCaches();
         HudPainter.draw(g, mc.font, hud2Cache, settings.hud2X, settings.hud2Y, HudLines.ACCENT, false);
     }
 
     private static void renderZone(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
-        if (!settings.zoneVisible || mc.player == null || mc.gui.hud.isHidden() || mc.gui.screen() instanceof TrevorUiScreen) return;
+        if (!overlaysOn || !settings.zoneVisible || mc.player == null || mc.gui.hud.isHidden() || mc.gui.screen() instanceof TrevorUiScreen) return;
         refreshCaches();
         HudPainter.draw(g, mc.font, zoneCache, settings.zoneX, settings.zoneY, zoneAccent(), false);
     }
@@ -338,7 +342,7 @@ public class TrevorplusClient implements ClientModInitializer {
      */
     private static void renderRings(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
-        if ((!settings.ringsEnabled && !settings.blocksEnabled) || mc.player == null || mc.gui.hud.isHidden()
+        if (!overlaysOn || (!settings.ringsEnabled && !settings.blocksEnabled) || mc.player == null || mc.gui.hud.isHidden()
                 || !playerInterp.has()) return;
         HintTracker hints = engine.hints();
         if (!hints.hasY()) return;
@@ -398,7 +402,7 @@ public class TrevorplusClient implements ClientModInitializer {
     /** Big flashing banner in the upper middle of the screen. */
     private static void renderAlert(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.gui.hud.isHidden()) return;
+        if (!overlaysOn || mc.player == null || mc.gui.hud.isHidden()) return;
         AlertQueue.View v = alerts.current(nowMs());
         if (v == null) return;
         int a = (int) Math.round(v.alpha() * 255);
@@ -442,6 +446,8 @@ public class TrevorplusClient implements ClientModInitializer {
 
     // used by the settings screen
     static Settings settings() { return settings; }
+    /** False after a minute outside the Farming Islands (when auto-hide is on): nothing is drawn or played. */
+    static boolean overlaysOn() { return overlaysOn; }
     static TrapperEngine engine() { return engine; }
     static List<HudLines.Line> mainLines() { hudCacheNanos = 0; refreshCaches(); return hudCache; }
     static List<HudLines.Line> spawnLines() { return hud2Cache; }
@@ -482,7 +488,7 @@ public class TrevorplusClient implements ClientModInitializer {
     private static void renderFinder(GuiGraphicsExtractor g, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
         MobFinder.Target t = MobFinder.current();
-        if (!settings.highlightEnabled || t == null || mc.player == null || mc.gui.hud.isHidden()
+        if (!overlaysOn || !settings.highlightEnabled || t == null || mc.player == null || mc.gui.hud.isHidden()
                 || !targetInterp.has() || !playerInterp.has()) return;
         float pt = delta.getGameTimeDeltaPartialTick(false);
         double tx = targetInterp.x(pt), ty = targetInterp.y(pt), tz = targetInterp.z(pt);
@@ -616,6 +622,11 @@ public class TrevorplusClient implements ClientModInitializer {
                 say(c.getSource(), "[" + cp.toString().trim() + "] " + l.replace('\u00a7', '&'));
             }
             return 1;
+        }));
+        root.then(lit("autohide").executes(c -> {
+            settings.autoHide = !settings.autoHide;
+            saveSettings();
+            return say(c.getSource(), "Auto-hide away from the Farming Islands " + (settings.autoHide ? "on" : "off"));
         }));
         root.then(lit("sound")
                 .executes(c -> {
@@ -890,6 +901,7 @@ public class TrevorplusClient implements ClientModInitializer {
         h(src, "blocks filter", "only highlight blocks on the hint rings");
         h(src, "alerts [test] | alertmin <rarity>", "rarity banners and the lowest rarity that triggers them");
         h(src, "sound [test]", "sound cues on or off");
+        h(src, "autohide", "hide everything after a minute outside the Farming Islands");
         h(src, "shuriken on|off|learn|clear", "reminder and the Shuriken icon marker");
         h(src, "autoaccept on|off", "accept Trevor's [YES] automatically");
         section(src, "Settings");

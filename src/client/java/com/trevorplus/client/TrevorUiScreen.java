@@ -82,6 +82,8 @@ final class TrevorUiScreen extends Screen {
         rows.add(new Row("Alert from rarity", "Lowest rarity that triggers the banner. Click to raise, right click to lower.",
                 () -> s.alertMinRarity().label(), () -> HudLines.color(s.alertMinRarity()),
                 () -> stepAlert(s, 1), () -> stepAlert(s, -1)));
+        rows.add(toggle("Auto-hide away", "Hides every panel, banner, highlight and sound after a minute outside the Farming Islands. Returns when you do.",
+                () -> s.autoHide, v -> s.autoHide = v));
         rows.add(toggle("Sound cues", "Plays short sounds for rarity alerts, Pelt Dye, the mob being found and Trevor being ready.",
                 () -> s.soundEnabled, v -> s.soundEnabled = v));
         rows.add(toggle("Mob-found ping", "Banner and sound the moment the quest mob loads in range.",

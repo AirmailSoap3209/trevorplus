@@ -50,7 +50,7 @@ final class BlockXray {
 
     /** Level-render hook. */
     static void collect(LevelRenderContext ctx) {
-        if (!active() || !TrevorplusClient.settings().blocksEnabled) return;
+        if (!active() || !TrevorplusClient.overlaysOn() || !TrevorplusClient.settings().blocksEnabled) return;
         int[] blocks = BlockHighlight.blocks();
         if (blocks.length == 0) return;
         try {

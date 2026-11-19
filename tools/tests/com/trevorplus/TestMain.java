@@ -90,6 +90,7 @@ public final class TestMain {
     public static void main(String[] args) throws Exception {
         testParser();
         testZone();
+        testPresence();
         testCooldown();
         testQuestTimingAndStats();
         testDedupeReplaceExpiry();
@@ -145,6 +146,28 @@ public final class TestMain {
         s.say("[NPC] Trevor: Try coming back in 12s!");
         s.advance(13_000);
         check("server cooldown still pings", s.ready == 1);
+    }
+
+    static void testPresence() {
+        com.trevorplus.quests.Presence p = new com.trevorplus.quests.Presence();
+        p.update(0, "Glowing Mushroom Cave", false);
+        check("shown in the islands", p.show(1_000));
+        p.update(10_000, "Village", false);
+        check("still shown just after leaving", p.show(60_000));
+        check("hidden after a minute away", !p.show(80_000));
+        p.update(81_000, null, false);
+        check("unreadable zone does not bring it back", !p.show(82_000));
+        p.update(90_000, "Oasis", false);
+        check("shown again on return", p.show(91_000));
+        p.update(95_000, "Village", true);
+        p.update(200_000, "Hub", true);
+        check("active quest keeps it shown", p.show(230_000));
+        com.trevorplus.quests.Presence q = new com.trevorplus.quests.Presence();
+        q.update(0, null, false);
+        q.update(500_000, null, false);
+        check("no sidebar at all stays visible", q.show(600_000));
+        check("trapper den is farming", com.trevorplus.quests.Presence.isFarmingZone("Trapper's Den"));
+        check("hub is not farming", !com.trevorplus.quests.Presence.isFarmingZone("Village"));
     }
 
     static void testZone() {

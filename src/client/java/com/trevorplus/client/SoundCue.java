@@ -24,7 +24,7 @@ final class SoundCue {
     }
 
     static void play(String sound, float pitch) {
-        if (broken || !TrevorplusClient.settings().soundEnabled) return;
+        if (broken || !TrevorplusClient.settings().soundEnabled || !TrevorplusClient.overlaysOn()) return;
         try {
             Minecraft mc = Minecraft.getInstance();
             Cue cue = new Cue(Identifier.parse(sound), pitch, 1.0f);
