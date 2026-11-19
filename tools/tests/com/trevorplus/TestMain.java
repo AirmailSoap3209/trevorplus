@@ -166,6 +166,14 @@ public final class TestMain {
         q.update(0, null, false);
         q.update(500_000, null, false);
         check("no sidebar at all stays visible", q.show(600_000));
+        com.trevorplus.quests.Presence g = new com.trevorplus.quests.Presence();
+        g.setGraceMs(120_000);
+        g.update(0, "Oasis", false);
+        g.update(1_000, "Village", false);
+        check("longer grace keeps it shown", g.show(100_000));
+        check("longer grace still ends", !g.show(130_000));
+        Settings ss = Settings.fromMap(new Settings().toMap());
+        check("new settings default", ss.autoHideSeconds == 60 && ss.msgFound && ss.msgAccepted && ss.msgWarp && ss.msgDye);
         check("trapper den is farming", com.trevorplus.quests.Presence.isFarmingZone("Trapper's Den"));
         check("hub is not farming", !com.trevorplus.quests.Presence.isFarmingZone("Village"));
     }

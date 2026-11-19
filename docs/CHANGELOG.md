@@ -121,3 +121,10 @@ top-face painting that cost most of the FPS.
 - All overlays (panels, direction line, alert banner, mob box, Theodolite blocks and rings) and sounds switch off after
   one minute outside the Farming Islands, and return when you come back or a quest is active. Based on the sidebar zone;
   if the sidebar never names a zone the overlays stay on. Toggle: settings menu or `/trevorplus autohide`.
+
+## Milestone 10
+
+- Auto-hide delay is configurable (menu row or `/trevorplus autohide <seconds>`, default 60 s).
+- While hidden, the warp key and auto-accept are disabled too. The menu key and `/tp` still open the menu.
+- Individual toggles for the chat messages the mod prints: mob found, quest accepted, warp info, dye recorded.
+- Settings menu is paged when it does not fit the screen.

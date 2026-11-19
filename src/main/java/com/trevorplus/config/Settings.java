@@ -30,8 +30,14 @@ public final class Settings {
     public boolean hud2Visible = true;
     public int hud2X = 6;
     public int hud2Y = 130;
-    /** Hide every overlay after a minute outside the Farming Islands. */
+    /** Hide every overlay (and switch off the warp key and auto-accept) after a while outside the Farming Islands. */
     public boolean autoHide = true;
+    public int autoHideSeconds = 60;
+    /** Chat messages Trevor+ prints for you, each switchable. */
+    public boolean msgFound = true;
+    public boolean msgAccepted = true;
+    public boolean msgWarp = true;
+    public boolean msgDye = true;
     /** Play short sounds for alerts, the mob being found and Trevor being ready. */
     public boolean soundEnabled = true;
     /** Ping (sound plus banner) when the quest mob first loads in range. */
@@ -104,6 +110,11 @@ public final class Settings {
         m.put("hud2X", hud2X);
         m.put("hud2Y", hud2Y);
         m.put("autoHide", autoHide);
+        m.put("autoHideSeconds", autoHideSeconds);
+        m.put("msgFound", msgFound);
+        m.put("msgAccepted", msgAccepted);
+        m.put("msgWarp", msgWarp);
+        m.put("msgDye", msgDye);
         m.put("soundEnabled", soundEnabled);
         m.put("mobFoundPing", mobFoundPing);
         m.put("readyPing", readyPing);
@@ -148,6 +159,11 @@ public final class Settings {
         s.hud2X = (int) FlatJson.lng(m, "hud2X", 6);
         s.hud2Y = (int) FlatJson.lng(m, "hud2Y", 130);
         s.autoHide = FlatJson.bool(m, "autoHide", true);
+        s.autoHideSeconds = (int) Math.max(5, Math.min(3600, FlatJson.lng(m, "autoHideSeconds", 60)));
+        s.msgFound = FlatJson.bool(m, "msgFound", true);
+        s.msgAccepted = FlatJson.bool(m, "msgAccepted", true);
+        s.msgWarp = FlatJson.bool(m, "msgWarp", true);
+        s.msgDye = FlatJson.bool(m, "msgDye", true);
         s.soundEnabled = FlatJson.bool(m, "soundEnabled", true);
         s.mobFoundPing = FlatJson.bool(m, "mobFoundPing", true);
         s.readyPing = FlatJson.bool(m, "readyPing", true);

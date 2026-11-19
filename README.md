@@ -66,7 +66,7 @@ Timer, finder, Theodolite aid, alerts and a HUD you can move anywhere.
 | | `blocks filter` | Only highlight blocks on the hint rings |
 | | `alerts [test]`, `alertmin <rarity>` | Rarity banners and their minimum rarity |
 | | `sound [test]` | Sound cues on or off |
-| | `autohide` | Hide everything after a minute outside the Farming Islands |
+| | `autohide [seconds]` | Toggle auto-hide, or set how long you can be away first |
 | | `shuriken on\|off\|learn\|clear` | Reminder and the Shuriken icon marker |
 | | `autoaccept on\|off` | Accept Trevor's `[YES]` automatically (off by default) |
 | Settings | `mult <1-3>` | Vincent multiplier |
@@ -87,7 +87,8 @@ Timer, finder, Theodolite aid, alerts and a HUD you can move anywhere.
 
 - **Reads, never snoops.** It only looks at chat, the sidebar, and entities and blocks your client already has loaded.
 - **Sends almost nothing.** One command per press of the warp key. The only other thing it can send is Trevor's own `[YES]` command, and only if you turn on auto-accept.
-- **Stays out of the way.** A minute after you leave the Farming Islands, every panel, banner, highlight and sound switches off, and comes back when you return (or start a quest). Turn it off with `/trevorplus autohide`. The settings menu still works anywhere.
+- **Stays out of the way.** After you have been outside the Farming Islands for a set time (default 1 minute, change it in the menu or with `/trevorplus autohide <seconds>`), every panel, banner, highlight and sound switches off, and the warp key and auto-accept stop doing anything. It all comes back when you return or start a quest. The settings menu and `/tp` still work anywhere.
+- **Your chat, your call.** Each chat line Trevor+ prints (mob found, quest accepted, warp info, dye recorded) has its own toggle in the menu.
 - **Server hops reset the quest.** Leaving or hopping servers drops the active quest without saving it, so your stats and history are not polluted. Past quests, totals and dye odds are untouched.
 - **Quests are saved as they finish**, so a crash loses nothing.
 

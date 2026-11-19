@@ -148,7 +148,8 @@ public class TrevorplusClient implements ClientModInitializer {
 
     private static void onTick(Minecraft mc) {
         while (navKey.consumeClick()) {
-            if (mc.player != null && mc.gui.screen() == null) navigate(mc);
+            // away from the Farming Islands the warp key does nothing (the press is simply swallowed)
+            if (overlaysOn && mc.player != null && mc.gui.screen() == null) navigate(mc);
         }
         while (uiKey.consumeClick()) openUi = true;
         if (openUi && mc.gui.screen() == null && mc.player != null) {
@@ -163,10 +164,10 @@ public class TrevorplusClient implements ClientModInitializer {
         if (mc.level == null || mc.player == null) return;
         trackPositions(mc);
 
-        String auto = engine.autoAcceptCommand();           // only when /trevorplus autoaccept on
+        String auto = overlaysOn ? engine.autoAcceptCommand() : null;           // only when /trevorplus autoaccept on
         if (auto != null) {
             sendCommand(mc, auto);
-            tell("Quest accepted automatically.");
+            if (settings.msgAccepted) tell("Quest accepted automatically.");
         }
         MobFinder.keepGlow();
         if (tickCount % 10 == 0) { if (overlaysOn) findMob(mc); else { MobFinder.clear(); lastTarget = null; } }
@@ -180,6 +181,7 @@ public class TrevorplusClient implements ClientModInitializer {
         engine.tick();
         List<String> lines = ScoreboardReader.sidebarLines(mc);
         currentZone = com.trevorplus.quests.ZoneReader.current(lines);
+        presence.setGraceMs(settings.autoHideSeconds * 1000L);
         presence.update(nowMs(), currentZone, engine.tracker().isActive());
         overlaysOn = !settings.autoHide || presence.show(nowMs());
         if (lines != null) {
@@ -224,7 +226,7 @@ public class TrevorplusClient implements ClientModInitializer {
         MobFinder.Target t = MobFinder.scan(mc, quest.get(), settings.highlightEnabled);
         if (t != null && lastTarget == null && settings.highlightEnabled) {
             double d = Math.sqrt(sq(t.x() - mc.player.getX()) + sq(t.y() - mc.player.getY()) + sq(t.z() - mc.player.getZ()));
-            tell("Found " + t.label() + ", " + Math.round(d) + " blocks away.");
+            if (settings.msgFound) tell("Found " + t.label() + ", " + Math.round(d) + " blocks away.");
             if (settings.mobFoundPing) {
                 alerts.push("MOB FOUND  -  " + Math.round(d) + "m", HudLines.color(t.rarity()), nowMs(), 2000);
                 SoundCue.found();
@@ -278,16 +280,16 @@ public class TrevorplusClient implements ClientModInitializer {
                 String cmd = engine.takePrompt();
                 if (cmd != null) {
                     sendCommand(mc, cmd);
-                    tell("Quest accepted.");
+                    if (settings.msgAccepted) tell("Quest accepted.");
                 }
             }
             case WARP_AREA, WARP_TRAPPER -> {
                 String cmd = action.command().startsWith("/") ? action.command().substring(1) : action.command();
                 mc.player.connection.sendCommand(cmd);
-                tell(action.note() + "  (" + action.command() + ")");
+                if (settings.msgWarp) tell(action.note() + "  (" + action.command() + ")");
             }
             case NONE -> {
-                if (!"throttled".equals(action.note())) tell(action.note());
+                if (settings.msgWarp && !"throttled".equals(action.note())) tell(action.note());
             }
             default -> { }
         }
@@ -556,7 +558,7 @@ public class TrevorplusClient implements ClientModInitializer {
     private static final class Listener implements EngineListener {
         @Override
         public void onDye(DyeLuck.DyeDrop drop) {
-            tell("Your Pelt Dye was recorded after " + drop.baseQuestsSince() + " quests.");
+            if (settings.msgDye) tell("Your Pelt Dye was recorded after " + drop.baseQuestsSince() + " quests.");
             if (settings.alertsEnabled) alerts.push("PELT DYE!", HudLines.GOLD, nowMs(), 6000);
             SoundCue.dye();
         }
@@ -623,11 +625,21 @@ public class TrevorplusClient implements ClientModInitializer {
             }
             return 1;
         }));
-        root.then(lit("autohide").executes(c -> {
-            settings.autoHide = !settings.autoHide;
-            saveSettings();
-            return say(c.getSource(), "Auto-hide away from the Farming Islands " + (settings.autoHide ? "on" : "off"));
-        }));
+        root.then(lit("autohide")
+                .executes(c -> {
+                    settings.autoHide = !settings.autoHide;
+                    saveSettings();
+                    return say(c.getSource(), "Auto-hide away from the Farming Islands " + (settings.autoHide ? "on" : "off")
+                            + " (after " + settings.autoHideSeconds + "s)");
+                })
+                .then(RequiredArgumentBuilder.<FabricClientCommandSource, Integer>argument(
+                        "seconds", IntegerArgumentType.integer(5, 3600))
+                        .executes(c -> {
+                            settings.autoHideSeconds = IntegerArgumentType.getInteger(c, "seconds");
+                            settings.autoHide = true;
+                            saveSettings();
+                            return say(c.getSource(), "Auto-hide on, after " + settings.autoHideSeconds + "s away");
+                        })));
         root.then(lit("sound")
                 .executes(c -> {
                     settings.soundEnabled = !settings.soundEnabled;
@@ -901,7 +913,7 @@ public class TrevorplusClient implements ClientModInitializer {
         h(src, "blocks filter", "only highlight blocks on the hint rings");
         h(src, "alerts [test] | alertmin <rarity>", "rarity banners and the lowest rarity that triggers them");
         h(src, "sound [test]", "sound cues on or off");
-        h(src, "autohide", "hide everything after a minute outside the Farming Islands");
+        h(src, "autohide [seconds]", "hide everything (and the warp key) after a while outside the Farming Islands");
         h(src, "shuriken on|off|learn|clear", "reminder and the Shuriken icon marker");
         h(src, "autoaccept on|off", "accept Trevor's [YES] automatically");
         section(src, "Settings");

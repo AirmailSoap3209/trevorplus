@@ -3,8 +3,8 @@ package com.trevorplus.quests;
 /** Mushroom Desert areas Trevor can send you to, with the default warp that is closest. */
 public enum Area {
     OASIS("Oasis", "desert"),
-    GORGE("Mushroom Gorge", "desert"),
-    SETTLEMENT("Desert Settlement", "trapper"),
+    GORGE("Mushroom Gorge", "trapper"),
+    SETTLEMENT("Desert Settlement", "desert"),
     OVERGROWN("Overgrown Mushroom Cave", "glowing"),
     GLOWING("Glowing Mushroom Cave", "glowing"),
     MOUNTAIN("Desert Mountain", "trapper");

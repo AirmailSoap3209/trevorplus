@@ -37,6 +37,7 @@ final class TrevorUiScreen extends Screen {
     private final List<Row> rows = new ArrayList<>();
     private final List<Movable> movables = new ArrayList<>();
     private boolean edit;
+    private int page;
     private Movable dragging;
     private double dragOffX, dragOffY;
     private int lastW = 427, lastH = 240;      // refreshed on every draw from the graphics object
@@ -82,8 +83,20 @@ final class TrevorUiScreen extends Screen {
         rows.add(new Row("Alert from rarity", "Lowest rarity that triggers the banner. Click to raise, right click to lower.",
                 () -> s.alertMinRarity().label(), () -> HudLines.color(s.alertMinRarity()),
                 () -> stepAlert(s, 1), () -> stepAlert(s, -1)));
-        rows.add(toggle("Auto-hide away", "Hides every panel, banner, highlight and sound after a minute outside the Farming Islands. Returns when you do.",
+        rows.add(toggle("Auto-hide away", "Hides every panel, banner, highlight and sound, and switches off the warp key and auto-accept, once you have been outside the Farming Islands for the time below.",
                 () -> s.autoHide, v -> s.autoHide = v));
+        rows.add(new Row("Auto-hide after", "How long you can be outside the Farming Islands before everything hides. Click to add 10 s, right click to subtract.",
+                () -> fmtSecs(s.autoHideSeconds), () -> HudLines.VALUE,
+                () -> { s.autoHideSeconds = s.autoHideSeconds >= 600 ? 600 : s.autoHideSeconds + 10; save(); },
+                () -> { s.autoHideSeconds = Math.max(10, s.autoHideSeconds - 10); save(); }));
+        rows.add(toggle("Chat: mob found", "Print a chat line when the quest mob is found, with its distance.",
+                () -> s.msgFound, v -> s.msgFound = v));
+        rows.add(toggle("Chat: quest accepted", "Print a chat line when the warp key or auto-accept accepts a quest for you.",
+                () -> s.msgAccepted, v -> s.msgAccepted = v));
+        rows.add(toggle("Chat: warp info", "Print a chat line saying where the warp key is taking you.",
+                () -> s.msgWarp, v -> s.msgWarp = v));
+        rows.add(toggle("Chat: dye recorded", "Print a chat line when your Pelt Dye is recorded.",
+                () -> s.msgDye, v -> s.msgDye = v));
         rows.add(toggle("Sound cues", "Plays short sounds for rarity alerts, Pelt Dye, the mob being found and Trevor being ready.",
                 () -> s.soundEnabled, v -> s.soundEnabled = v));
         rows.add(toggle("Mob-found ping", "Banner and sound the moment the quest mob loads in range.",
@@ -144,6 +157,10 @@ final class TrevorUiScreen extends Screen {
         };
     }
 
+    private static String fmtSecs(int s) {
+        return s % 60 == 0 ? (s / 60) + " min" : s < 60 ? s + " s" : (s / 60) + " min " + (s % 60) + " s";
+    }
+
     private static void stepAlert(Settings s, int d) {
         int n = Rarity.values().length;
         s.alertMin = Rarity.values()[((s.alertMinRarity().ordinal() + d) % n + n) % n].name();
@@ -162,7 +179,19 @@ final class TrevorUiScreen extends Screen {
     private static void save() { TrevorplusClient.saveSettings(); }
 
     private static final int HELP_LINES = 3;
-    private int panelH() { return TOP + rows.size() * ROW_H + 8 + HELP_LINES * 10 + 22; }
+    /** Rows that fit on screen at the current GUI scale (the rest go on further pages). */
+    private int perPage() {
+        int fixed = TOP + 8 + HELP_LINES * 10 + 22 + 8;
+        return Math.max(5, Math.min(rows.size(), (lastH - fixed) / ROW_H));
+    }
+    private int pages() { return Math.max(1, (rows.size() + perPage() - 1) / perPage()); }
+    private int firstRow() { return Math.min(page, pages() - 1) * perPage(); }
+    private int shownRows() { return Math.min(perPage(), rows.size() - firstRow()); }
+    private int panelH() { return TOP + perPage() * ROW_H + 8 + HELP_LINES * 10 + 22; }
+    private boolean overPager(double mx, double my) {
+        int px = panelX(), py = panelY();
+        return pages() > 1 && mx >= px + PANEL_W - 90 && mx < px + PANEL_W - 4 && my >= py + 4 && my < py + 20;
+    }
     private int panelX() { return (lastW - PANEL_W) / 2; }
     private int panelY() { return Math.max(2, (lastH - panelH()) / 2); }
 
@@ -198,9 +227,13 @@ final class TrevorUiScreen extends Screen {
         g.fill(px, py, px + PANEL_W, py + 2, HudLines.ACCENT);
         g.text(font, "TREVOR+", px + 10, py + 8, HudLines.ACCENT, true);
         g.text(font, "settings", px + 10 + font.width("TREVOR+ "), py + 8, HudLines.LABEL, true);
+        if (pages() > 1) {
+            String pg = "\u25c0  " + (Math.min(page, pages() - 1) + 1) + " / " + pages() + "  \u25b6";
+            g.text(font, pg, px + PANEL_W - 10 - font.width(pg), py + 8, HudLines.GOLD, true);
+        }
         Row hovered = null;
-        for (int i = 0; i < rows.size(); i++) {
-            Row r = rows.get(i);
+        for (int i = 0; i < shownRows(); i++) {
+            Row r = rows.get(firstRow() + i);
             int ry = py + TOP + i * ROW_H;
             boolean hover = mouseX >= px + 6 && mouseX < px + PANEL_W - 6 && mouseY >= ry && mouseY < ry + ROW_H - 2;
             if (hover) hovered = r;
@@ -210,7 +243,7 @@ final class TrevorUiScreen extends Screen {
             g.text(font, v, px + PANEL_W - 12 - font.width(v), ry + 2, r.color().get(), true);
         }
         // description of the hovered row
-        int dy = py + TOP + rows.size() * ROW_H + 6;
+        int dy = py + TOP + perPage() * ROW_H + 6;
         g.fill(px + 6, dy, px + PANEL_W - 6, dy + HELP_LINES * 10 + 6, 0xFF151A23);
         String help = hovered != null ? hovered.help() : "Hover a setting to see what it does. Click to change, right click steps backwards.";
         int ly = dy + 4;
@@ -218,7 +251,7 @@ final class TrevorUiScreen extends Screen {
             g.text(font, line, px + 12, ly, hovered != null ? HudLines.VALUE : HudLines.LABEL, true);
             ly += 10;
         }
-        g.text(font, "Esc closes. Boxes can also be dragged from here.", px + 10, dy + HELP_LINES * 10 + 11, HudLines.LABEL, true);
+        g.text(font, (pages() > 1 ? "Arrows (top right) change page. " : "") + "Esc closes.", px + 10, dy + HELP_LINES * 10 + 11, HudLines.LABEL, true);
     }
 
     private static List<String> wrap(Font font, String text, int width, int maxLines) {
@@ -256,10 +289,16 @@ final class TrevorUiScreen extends Screen {
         }
         int px = panelX(), py = panelY();
         if (mx >= px && mx < px + PANEL_W && my >= py && my < py + panelH()) {
-            for (int i = 0; i < rows.size(); i++) {
+            if (overPager(mx, my)) {
+                boolean back = mx < px + PANEL_W - 47;
+                page = ((Math.min(page, pages() - 1) + (back ? -1 : 1)) % pages() + pages()) % pages();
+                return true;
+            }
+            for (int i = 0; i < shownRows(); i++) {
                 int ry = py + TOP + i * ROW_H;
                 if (mx >= px + 6 && mx < px + PANEL_W - 6 && my >= ry && my < ry + ROW_H - 2) {
-                    if (event.button() == 1) rows.get(i).right().run(); else rows.get(i).left().run();
+                    Row r = rows.get(firstRow() + i);
+                    if (event.button() == 1) r.right().run(); else r.left().run();
                     return true;
                 }
             }

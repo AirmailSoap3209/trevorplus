@@ -8,12 +8,13 @@ import java.util.List;
  * timer, and if the sidebar never names a zone the overlays simply stay on. Pure logic.
  */
 public final class Presence {
-    public static final long GRACE_MS = 60_000;
+    public static final long DEFAULT_GRACE_MS = 60_000;
 
     /** Zones of the Farming Islands (Mushroom Desert and the Barn) besides the Trevor areas. */
     private static final List<String> EXTRA_ZONES = List.of(
             "trapper's den", "mushroom desert", "desert mountain", "the barn", "barn", "the farming islands", "farming islands");
 
+    private long graceMs = DEFAULT_GRACE_MS;
     private long lastHereMs;
     private boolean started;
     private boolean seenZone;
@@ -26,6 +27,9 @@ public final class Presence {
         return z.contains("farming islands");
     }
 
+    /** How long you may be away before the overlays hide. */
+    public void setGraceMs(long ms) { graceMs = Math.max(0, ms); }
+
     /** Call about once a second. */
     public void update(long nowMs, String zone, boolean questActive) {
         if (!started) { started = true; lastHereMs = nowMs; }
@@ -35,6 +39,6 @@ public final class Presence {
 
     public boolean show(long nowMs) {
         // with no readable sidebar at all (hidden scoreboard) there is no way to tell, so stay visible
-        return !started || !seenZone || nowMs - lastHereMs <= GRACE_MS;
+        return !started || !seenZone || nowMs - lastHereMs <= graceMs;
     }
 }
