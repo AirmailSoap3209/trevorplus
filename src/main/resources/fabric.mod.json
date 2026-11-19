@@ -1,0 +1,42 @@
+{
+	"schemaVersion": 1,
+	"id": "trevorplus",
+	"version": "${version}",
+	"name": "Trevor+",
+	"description": "Trapper pelt-grinding companion for Hypixel SkyBlock. Quest timer and pelts/hour, mob finder with an on-screen box, Theodolite block highlight, rarity alerts, zone and cooldown tracking, and a movable HUD with a built-in settings menu. Client-side only.",
+	"authors": [
+		"AirmailSoap3209"
+	],
+	"contact": {},
+	"license": "CC0-1.0",
+	"icon": "assets/trevorplus/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"main": [
+			"com.trevorplus.Trevorplus"
+		],
+		"client": [
+			"com.trevorplus.client.TrevorplusClient"
+		]
+	},
+	"mixins": [
+		"trevorplus.mixins.json",
+		{
+			"config": "trevorplus.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	},
+	"custom": {
+		"modmenu": {
+			"badges": [
+				"client"
+			]
+		}
+	}
+}

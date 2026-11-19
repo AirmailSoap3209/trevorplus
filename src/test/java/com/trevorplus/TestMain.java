@@ -1,0 +1,631 @@
+package com.trevorplus;
+
+import com.trevorplus.config.Settings;
+import com.trevorplus.core.Clock;
+import com.trevorplus.core.EngineListener;
+import com.trevorplus.core.TrapperEngine;
+import com.trevorplus.dye.DyeLuck;
+import com.trevorplus.entities.NametagInfo;
+import com.trevorplus.entities.NametagParser;
+import com.trevorplus.events.TrevorMessage;
+import com.trevorplus.events.TrevorParser;
+import com.trevorplus.navigation.Navigator;
+import com.trevorplus.navigation.Navigator.NavAction;
+import com.trevorplus.navigation.Navigator.Type;
+import com.trevorplus.quests.*;
+import com.trevorplus.statistics.SessionStats;
+import com.trevorplus.storage.FlatJson;
+import com.trevorplus.storage.HistoryStore;
+import com.trevorplus.theodolite.HintTracker;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+/** Dependency-free test runner (JUnit is not available offline). Port to JUnit 5 once Gradle is set up. */
+public final class TestMain {
+    static int passed, failed;
+
+    static void check(String name, boolean ok) {
+        if (ok) passed++;
+        else { failed++; System.out.println("FAIL: " + name); }
+    }
+    static void eq(String name, Object expected, Object actual) {
+        boolean ok = expected == null ? actual == null : expected.equals(actual);
+        if (!ok) System.out.println("   expected=" + expected + " actual=" + actual);
+        check(name, ok);
+    }
+    static void near(String name, double expected, double actual, double eps) {
+        boolean ok = Math.abs(expected - actual) <= eps;
+        if (!ok) System.out.println("   expected=" + expected + " actual=" + actual);
+        check(name, ok);
+    }
+
+    static final class FakeClock implements Clock {
+        long mono = 1_000_000L, wall = 1_700_000_000_000L;
+        public long monoMs() { return mono; }
+        public long wallMs() { return wall; }
+        void add(long ms) { mono += ms; wall += ms; }
+    }
+
+    static final class Rig {
+        final FakeClock clock = new FakeClock();
+        final Settings settings = new Settings();
+        final List<QuestRecord> finished = new ArrayList<>();
+        final List<DyeLuck.DyeDrop> dyes = new ArrayList<>();
+        final List<String> logs = new ArrayList<>();
+        double[] pos = {0, 64, 0};
+        TrapperEngine engine;
+
+        Rig(HistoryStore store) {
+            engine = new TrapperEngine(clock, settings, store, () -> pos, new EngineListener() {
+                @Override public void onQuestFinished(QuestRecord r) { finished.add(r); }
+                @Override public void onDye(DyeLuck.DyeDrop d) { dyes.add(d); }
+            }, logs::add);
+        }
+        Rig() { this(null); }
+
+        /** Advance time in 1 second steps, ticking like the game would. */
+        void advance(long ms) {
+            long left = ms;
+            while (left > 0) {
+                long step = Math.min(1000, left);
+                clock.add(step);
+                engine.tick();
+                left -= step;
+            }
+        }
+        void say(String line) { engine.onMessage(line); }
+    }
+
+    static final String ACCEPT_OASIS = "[NPC] Trevor: You can find your TRACKABLE animal near the Oasis.";
+    static final String ACCEPT_SETTLEMENT = "[NPC] Trevor: You can find your UNTRACKABLE animal near the Desert Settlement.";
+
+    public static void main(String[] args) throws Exception {
+        testParser();
+        testQuestTimingAndStats();
+        testDedupeReplaceExpiry();
+        testSelfDeathAndTimingSetting();
+        testBoardReconcile();
+        testPause();
+        testDyeLuck();
+        testDyeEngine();
+        testNavigator();
+        testTheodolite();
+        testNametag();
+        testStorage();
+        testRestartKeepsLuck();
+        testHudAndBoard();
+        System.out.println("\n" + passed + " passed, " + failed + " failed");
+        if (failed > 0) System.exit(1);
+    }
+
+    static void testParser() {
+        TrevorParser p = new TrevorParser();
+        eq("accept", Optional.of(new TrevorMessage.QuestAccepted(Rarity.TRACKABLE, "Oasis")), p.parse(ACCEPT_OASIS));
+        eq("accept w/ color codes", Optional.of(new TrevorMessage.QuestAccepted(Rarity.TRACKABLE, "Desert Mountain")),
+                p.parse("[NPC] Trevor: You can find your TRACKABLE animal near the \u00a7eDesert Mountain\u00a7r."));
+        eq("accept multiword area", Optional.of(new TrevorMessage.QuestAccepted(Rarity.ENDANGERED, "Overgrown Mushroom Cave")),
+                p.parse("[NPC] Trevor: You can find your ENDANGERED animal near the Overgrown Mushroom Cave."));
+        eq("accept unknown rarity", Optional.of(new TrevorMessage.QuestAccepted(null, "Oasis")),
+                p.parse("[NPC] Trevor: You can find your MYTHIC animal near the Oasis."));
+        eq("kill", Optional.of(new TrevorMessage.KillReward(2)), p.parse("Killing the animal rewarded you 2 pelts."));
+        eq("kill singular", Optional.of(new TrevorMessage.KillReward(1)), p.parse("Killing the animal rewarded you 1 pelt."));
+        eq("self death", Optional.of(new TrevorMessage.SelfDeathReward(8)),
+                p.parse("Your mob died randomly, you are rewarded 8 pelts."));
+        eq("return prompt", Optional.of(new TrevorMessage.ReturnPrompt()),
+                p.parse("Return to the Trapper soon to get a new animal to hunt!"));
+        eq("cooldown", Optional.of(new TrevorMessage.Cooldown(17)), p.parse("[NPC] Trevor: Try coming back in 17s!"));
+        eq("already active", Optional.of(new TrevorMessage.AlreadyActive()),
+                p.parse("[NPC] Trevor: You already have a mob spawned! Hunt that mob first!"));
+        eq("out of time", Optional.of(new TrevorMessage.OutOfTime()),
+                p.parse("You ran out of time and the animal disappeared!"));
+        eq("hint above", Optional.of(new TrevorMessage.Hint(25, 30, false)),
+                p.parse("The target is around 25 blocks above, at a 30 degrees angle!"));
+        eq("hint below", Optional.of(new TrevorMessage.Hint(-60, 30, false)),
+                p.parse("The target is around 60 blocks below, at a 30 degrees angle!"));
+        eq("hint exact", Optional.of(new TrevorMessage.Hint(0, 0, true)), p.parse("You are at the exact height!"));
+        eq("dye with rank", Optional.of(new TrevorMessage.DyeFound("CharlesMa529")),
+                p.parse("WOW! [VIP+] CharlesMa529 found a Pelt Dye!"));
+        eq("dye without rank", Optional.of(new TrevorMessage.DyeFound("Steve")), p.parse("WOW! Steve found a Pelt Dye!"));
+        check("noise ignored", p.parse("The animal sent you flying!").isEmpty());
+        check("player spoof ignored", p.parse("[MVP+] Bob: Killing the animal rewarded you 99 pelts.").isEmpty());
+        check("player spoof dye ignored", p.parse("Guild > [MVP+] Bob: WOW! Bob found a Pelt Dye!").isEmpty());
+        check("null safe", p.parse(null).isEmpty());
+    }
+
+    static void testQuestTimingAndStats() {
+        Rig r = new Rig();
+        r.say(ACCEPT_OASIS);
+        r.advance(83_000);
+        r.say("Killing the animal rewarded you 2 pelts.");
+        r.say("Return to the Trapper soon to get a new animal to hunt!");
+        eq("first record count", 1, r.finished.size());
+        QuestRecord a = r.finished.get(0);
+        eq("duration 1", 83_000L, a.durationMs());
+        eq("outcome 1", Outcome.KILLED, a.outcome());
+        eq("pelts 1", 2, a.pelts());
+        eq("rarity 1", Rarity.TRACKABLE, a.rarity());
+        eq("area 1", Area.OASIS, a.area());
+        check("return prompt after reward does not create a record", r.finished.size() == 1);
+
+        r.advance(20 * 60_000);          // long idle, must not count as quest time
+        r.say(ACCEPT_SETTLEMENT);
+        r.advance(40_000);
+        r.say("Killing the animal rewarded you 4 pelts.");
+        QuestRecord b = r.finished.get(1);
+        eq("duration 2 excludes the gap", 40_000L, b.durationMs());
+
+        SessionStats.Snapshot s = r.engine.sessionSnapshot();
+        eq("quests", 2, s.quests());
+        eq("pelts", 6L, s.pelts());
+        near("avg", 61_500, s.avgMs(), 0.01);
+        eq("fastest", 40_000L, s.fastestMs());
+        eq("slowest", 83_000L, s.slowestMs());
+        near("avg trackable", 83_000, s.avgMsByRarity().get(Rarity.TRACKABLE), 0.01);
+        near("avg untrackable", 40_000, s.avgMsByRarity().get(Rarity.UNTRACKABLE), 0.01);
+        // idle capped at 5 min: 83s + 300s + 40s
+        eq("session time with idle cap", 423_000L, s.elapsedMs());
+        near("pelts/hour", 6 * 3600.0 / 423.0, s.peltsPerHour(), 0.001);
+        near("pelts/min", 6 * 60.0 / 423.0, s.peltsPerMinute(), 0.001);
+        near("pelts/quest", 3.0, s.peltsPerQuest(), 1e-9);
+        near("quests/hour", 2 * 3600.0 / 423.0, s.questsPerHour(), 0.001);
+    }
+
+    static void testDedupeReplaceExpiry() {
+        Rig r = new Rig();
+        r.say(ACCEPT_OASIS);
+        r.advance(30_000);
+        r.say("Killing the animal rewarded you 2 pelts.");
+        r.clock.add(50);
+        r.say("Killing the animal rewarded you 2 pelts.");   // duplicate delivery
+        eq("duplicate reward dropped", 1, r.finished.size());
+
+        // replaced quest -> LOST
+        r.advance(5_000);
+        r.say(ACCEPT_OASIS);
+        r.advance(10_000);
+        r.say(ACCEPT_SETTLEMENT);
+        eq("replaced quest closed", 2, r.finished.size());
+        eq("replaced outcome", Outcome.LOST, r.finished.get(1).outcome());
+
+        // local expiry with no server message
+        r.advance(QuestTracker.MAX_QUEST_MS + QuestTracker.EXPIRE_GRACE_MS + 2000);
+        eq("local expiry", 3, r.finished.size());
+        eq("expiry outcome", Outcome.EXPIRED, r.finished.get(2).outcome());
+        check("tracker idle after expiry", !r.engine.tracker().isActive());
+
+        // server expiry message
+        r.say(ACCEPT_OASIS);
+        r.advance(60_000);
+        r.say("You ran out of time and the animal disappeared!");
+        eq("server expiry", Outcome.EXPIRED, r.finished.get(3).outcome());
+
+        SessionStats.Snapshot s = r.engine.sessionSnapshot();
+        eq("quests count only completions", 1, s.quests());
+        eq("lost counted", 1, s.lost());
+        eq("expired counted", 2, s.expired());
+        near("failed quests do not affect average", 30_000, s.avgMs(), 0.01);
+    }
+
+    static void testSelfDeathAndTimingSetting() {
+        Rig r = new Rig();
+        r.say(ACCEPT_OASIS);
+        r.advance(20_000);
+        r.say("Killing the animal rewarded you 2 pelts.");
+        r.advance(3_000);
+        r.say("[NPC] Trevor: You can find your ENDANGERED animal near the Oasis.");
+        r.advance(100_000);
+        r.say("Your mob died randomly, you are rewarded 8 pelts.");
+        eq("self died outcome", Outcome.SELF_DIED, r.finished.get(1).outcome());
+        SessionStats.Snapshot s = r.engine.sessionSnapshot();
+        eq("quests incl self death", 2, s.quests());
+        eq("pelts incl self death", 10L, s.pelts());
+        near("avg includes self death by default", 60_000, s.avgMs(), 0.01);
+        r.settings.timeSelfDeaths = false;
+        near("avg excludes self death when disabled", 20_000, r.engine.sessionSnapshot().avgMs(), 0.01);
+        eq("self death did not advance dye luck", 1L, r.engine.luck().questsLifetime());
+        r.settings.selfDeathCountsForDye = true;
+        r.advance(3000);
+        r.say("[NPC] Trevor: You can find your ENDANGERED animal near the Oasis.");
+        r.advance(1000);
+        r.say("Your mob died randomly, you are rewarded 8 pelts.");
+        eq("self death counts for dye when enabled", 2L, r.engine.luck().questsLifetime());
+    }
+
+    static void testBoardReconcile() {
+        Rig r = new Rig();
+        r.say(ACCEPT_OASIS);
+        for (int i = 0; i < 5; i++) { r.advance(1000); r.engine.onTrackerBoard(true, "Oasis"); }
+        check("still active while board shows quest", r.engine.tracker().isActive());
+        for (int i = 0; i < 12; i++) { r.advance(1000); r.engine.onTrackerBoard(false, null); }
+        check("closed after board lost the quest", !r.engine.tracker().isActive());
+        eq("lost outcome from board", Outcome.LOST, r.finished.get(r.finished.size() - 1).outcome());
+
+        // slow scoreboard right after accept must not close the quest
+        Rig r2 = new Rig();
+        r2.say(ACCEPT_OASIS);
+        for (int i = 0; i < 15; i++) { r2.advance(1000); r2.engine.onTrackerBoard(false, null); }
+        check("never-seen board does not abandon", r2.engine.tracker().isActive());
+
+        // no phantom quest right after a finish
+        Rig r3 = new Rig();
+        r3.say(ACCEPT_OASIS);
+        r3.advance(10_000);
+        r3.say("Killing the animal rewarded you 2 pelts.");
+        for (int i = 0; i < 8; i++) { r3.advance(1000); r3.engine.onTrackerBoard(true, "Oasis"); }
+        check("no phantom recovery after finish", !r3.engine.tracker().isActive());
+
+        // genuine recovery after restart
+        Rig r4 = new Rig();
+        for (int i = 0; i < 7; i++) { r4.advance(1000); r4.engine.onTrackerBoard(true, "Glowing Mushroom Cave"); }
+        check("recovered from board", r4.engine.tracker().isActive());
+        eq("recovered area", "Glowing Mushroom Cave", r4.engine.tracker().current().get().areaName());
+        check("recovered quest is untimed", !r4.engine.tracker().current().get().timed());
+        r4.say("Killing the animal rewarded you 6 pelts.");
+        QuestRecord rec = r4.finished.get(0);
+        check("recovered record untimed", !rec.timed());
+        eq("recovered pelts counted", 6, rec.pelts());
+        eq("untimed excluded from timing", 0.0, r4.engine.sessionSnapshot().avgMs());
+        eq("untimed still counted as a quest", 1, r4.engine.sessionSnapshot().quests());
+
+        // reward without any accept seen
+        Rig r5 = new Rig();
+        r5.say("Killing the animal rewarded you 4 pelts.");
+        eq("reward without accept counted", 4L, r5.engine.sessionSnapshot().pelts());
+
+        // disconnect mid quest
+        Rig r6 = new Rig();
+        r6.say(ACCEPT_OASIS);
+        r6.advance(5000);
+        r6.engine.onWorldLeave();
+        eq("disconnect outcome", Outcome.INTERRUPTED, r6.finished.get(0).outcome());
+        eq("interrupted not a completion", 0, r6.engine.sessionSnapshot().quests());
+    }
+
+    static void testPause() {
+        Rig r = new Rig();
+        r.say(ACCEPT_OASIS);
+        r.advance(10_000);
+        r.say("Killing the animal rewarded you 2 pelts.");
+        r.engine.pauseSession();
+        r.advance(60_000);
+        r.say(ACCEPT_OASIS);
+        r.advance(10_000);
+        r.say("Killing the animal rewarded you 2 pelts.");
+        SessionStats.Snapshot s = r.engine.sessionSnapshot();
+        eq("paused quest excluded from session", 1, s.quests());
+        eq("paused session time frozen", 10_000L, s.elapsedMs());
+        eq("paused quest still in history callbacks", 2, r.finished.size());
+        eq("paused quest still advanced dye luck", 2L, r.engine.luck().questsLifetime());
+        r.engine.resumeSession();
+        r.advance(1000);
+        eq("resumed session continues", 11_000L, r.engine.sessionSnapshot().elapsedMs());
+        r.engine.resetSession();
+        eq("reset clears quests", 0, r.engine.sessionSnapshot().quests());
+        eq("reset clears time", 0L, r.engine.sessionSnapshot().elapsedMs());
+    }
+
+    static void testDyeLuck() {
+        near("expected quests per dye 1x", 15_781.25, DyeLuck.expectedQuestsPerDye(1, 6), 0.01);
+        near("expected quests per dye 3x", 5_260.4167, DyeLuck.expectedQuestsPerDye(3, 6), 0.01);
+        check("slayer 9 weight raises odds", DyeLuck.averageProbability(1, 7) > DyeLuck.averageProbability(1, 6));
+        near("median < expected", 10_938.7, DyeLuck.medianQuestsPerDye(1, 6), 5.0);
+        near("p trackable", 2e-5, DyeLuck.probability(Rarity.TRACKABLE, 1), 1e-12);
+        near("p elusive 3x", 0.0012, DyeLuck.probability(Rarity.ELUSIVE, 3), 1e-12);
+
+        DyeLuck d = new DyeLuck();
+        for (int i = 0; i < 100; i++) d.recordQuest(Rarity.TRACKABLE, 1);
+        near("chance after 100 trackable", 1 - Math.pow(1 - 2e-5, 100), d.chanceSinceLastDye(), 1e-12);
+        eq("base progress", 100L, d.baseQuestsSinceDye());
+        for (int i = 0; i < 10; i++) d.recordQuest(Rarity.ELUSIVE, 3);
+        eq("base counts each quest once", 110L, d.baseQuestsSinceDye());
+        near("effective counts multiplier", 130.0, d.effectiveQuestsSinceDye(), 1e-9);
+        near("expected dyes lifetime", 100 * 2e-5 + 10 * 0.0012, d.expectedDyesLifetime(), 1e-12);
+        DyeLuck.DyeDrop drop = d.recordDye(5L, 3);
+        eq("drop base", 110L, drop.baseQuestsSince());
+        eq("reset after dye", 0L, d.baseQuestsSinceDye());
+        near("chance resets", 0.0, d.chanceSinceLastDye(), 1e-12);
+        eq("dyes found", 1, d.dyesFound());
+        d.setQuestsSinceDye(5000, 6);
+        check("manual adjust flagged as estimate", d.isEstimated());
+        near("manual adjust chance", 1 - Math.pow(1 - DyeLuck.averageProbability(1, 6), 5000), d.chanceSinceLastDye(), 1e-9);
+        DyeLuck copy = DyeLuck.fromMap(FlatJson.decode(FlatJson.encode(d.toMap())));
+        near("persisted chance", d.chanceSinceLastDye(), copy.chanceSinceLastDye(), 1e-12);
+        eq("persisted dyes", d.dyesFound(), copy.dyesFound());
+    }
+
+    static void testDyeEngine() {
+        Rig r = new Rig();
+        r.settings.playerName = "Tester";
+        r.settings.setMultiplier(3);
+        r.say(ACCEPT_OASIS);
+        r.advance(10_000);
+        r.say("Killing the animal rewarded you 2 pelts.");
+        r.say("WOW! [MVP+] Someone found a Pelt Dye!");
+        eq("other players' dye ignored", 0, r.dyes.size());
+        r.advance(1000);
+        r.say("WOW! [MVP+] Tester found a Pelt Dye!");
+        eq("own dye recorded", 1, r.dyes.size());
+        eq("quest counted before reset", 1L, r.dyes.get(0).baseQuestsSince());
+        eq("multiplier stored on drop", 3, r.dyes.get(0).multiplier());
+        eq("luck reset", 0L, r.engine.luck().baseQuestsSinceDye());
+        near("record used 3x", 3.0 / 50_000, r.finished.get(0).multiplier() * 1.0 / 50_000, 1e-12);
+
+        // dye line arrives BEFORE the reward line
+        r.advance(30_000);
+        r.say(ACCEPT_OASIS);
+        r.advance(10_000);
+        r.say("WOW! Tester found a Pelt Dye!");
+        r.advance(1000);
+        eq("dye waits for reward line", 1, r.dyes.size());
+        r.say("Killing the animal rewarded you 2 pelts.");
+        eq("dye applied after reward", 2, r.dyes.size());
+        eq("quest belongs to streak the dye ended", 1L, r.dyes.get(1).baseQuestsSince());
+        eq("luck reset after both", 0L, r.engine.luck().baseQuestsSinceDye());
+
+        // multiplier change mid-session
+        r.settings.setMultiplier(2);
+        r.advance(10_000);
+        r.say(ACCEPT_OASIS);
+        r.advance(5_000);
+        r.say("Killing the animal rewarded you 2 pelts.");
+        eq("multiplier change applies to later quests", 2, r.finished.get(r.finished.size() - 1).multiplier());
+        near("effective progress", 2.0, r.engine.luck().effectiveQuestsSinceDye(), 1e-9);
+
+        // unset username never records
+        Rig r2 = new Rig();
+        r2.say("WOW! Tester found a Pelt Dye!");
+        r2.advance(10_000);
+        eq("no username -> ignored", 0, r2.dyes.size());
+    }
+
+    static void testNavigator() {
+        Settings s = new Settings();
+        Navigator n = new Navigator(s);
+        long t = 0;
+        NavAction a = n.decide(new Navigator.Context(false, false, null), t);
+        eq("idle -> trapper", Type.WARP_TRAPPER, a.type());
+        eq("trapper command", "/warp trapper", a.command());
+        eq("throttled", Type.NONE, n.decide(new Navigator.Context(false, false, null), t + 1000).type());
+        a = n.decide(new Navigator.Context(true, false, null), t + 4000);
+        eq("prompt -> accept", Type.ACCEPT_PROMPT, a.type());
+        a = n.decide(new Navigator.Context(false, true, "Oasis"), t + 8000);
+        eq("oasis warp", "/warp desert", a.command());
+        a = n.decide(new Navigator.Context(false, true, "Overgrown Mushroom Cave"), t + 12000);
+        eq("overgrown warp", "/warp glowing", a.command());
+        a = n.decide(new Navigator.Context(false, true, "Desert Mountain"), t + 16000);
+        eq("mountain warp", "/warp trapper", a.command());
+        a = n.decide(new Navigator.Context(false, true, "Mystery Cave"), t + 20000);
+        eq("unknown area -> no action", Type.NONE, a.type());
+        s.warpOverrides.put("OASIS", "/warp custom");
+        a = n.decide(new Navigator.Context(false, true, "Oasis"), t + 24000);
+        eq("override applies", "/warp custom", a.command());
+        s.navWarpTrapper = false;
+        eq("trapper warp can be disabled", Type.NONE, n.decide(new Navigator.Context(false, false, null), t + 28000).type());
+        check("describe", n.describe(new Navigator.Context(false, true, "Gorge")).contains("Unknown")
+                || n.describe(new Navigator.Context(false, true, "Mushroom Gorge")).contains("/warp"));
+
+        // engine-level
+        Rig r = new Rig();
+        eq("engine idle nav", Type.WARP_TRAPPER, r.engine.onNavKey(false).type());
+        r.advance(4000);
+        r.say("[NPC] Trevor: You can find your TRACKABLE animal near the Glowing Mushroom Cave.");
+        r.advance(4000);
+        eq("engine active nav", "/warp glowing", r.engine.onNavKey(false).command());
+    }
+
+    static void testTheodolite() {
+        near("radius 25 @30deg", 43.30127, HintTracker.radiusFor(25, 30), 1e-4);
+        near("radius 60 @45deg", 60.0, HintTracker.radiusFor(60, 45), 1e-9);
+        check("0 degrees ring is huge", HintTracker.radiusFor(5, 0) > HintTracker.MAX_RADIUS);
+
+        HintTracker h = new HintTracker();
+        h.addHint(0, 64, 0, 5, 0, false);
+        eq("0 degree hint adds no ring", 0, h.rings().size());
+        check("but still sets a Y band", h.hasY());
+        near("Y estimate", 69.0, h.estimatedY(), 1e-9);
+
+        h.reset();
+        h.addHint(0, 64, 0, -10, 45, false);
+        near("ring below", 10.0, h.rings().get(0).radius(), 1e-9);
+        near("ring at mob Y", 54.0, h.rings().get(0).cy(), 1e-9);
+        h.addHint(2, 64, 1, -11, 45, false);
+        near("band narrows", 2.0, h.maxY() - h.minY(), 3.0);
+        h.addHint(0, 70, 0, 0, 0, true);
+        check("exact height sets band around player Y", h.estimatedY() > 60 && h.estimatedY() < 75);
+        h.addHint(0, 200, 0, 0, 0, true);
+        near("disjoint hint replaces band", 200.0, h.estimatedY(), 1e-9);
+
+        // animal at (30, 40) from origin; used item at (0,0) and (60,0) -> both 50 away
+        HintTracker t = new HintTracker();
+        t.addHint(0, 64, 0, 50, 45, false);
+        t.addHint(60, 64, 0, 50, 45, false);
+        List<double[]> c = t.candidates();
+        eq("two candidates", 2, c.size());
+        boolean found = false;
+        for (double[] p : c) if (Math.abs(p[0] - 30) < 1e-6 && Math.abs(p[1] - 40) < 1e-6) found = true;
+        check("true position among candidates", found);
+        near("distance to ring outside", 5.0, HintTracker.distanceToRing(t.rings().get(0), 55, 0), 1e-9);
+        near("distance to ring inside", -10.0, HintTracker.distanceToRing(t.rings().get(0), 40, 0), 1e-9);
+        check("fewer than two rings gives none", new HintTracker().candidates().isEmpty());
+        // nearly-touching rings (rounded hints) still give a point
+        List<double[]> near = HintTracker.intersect(new HintTracker.Ring(0, 0, 0, 30), new HintTracker.Ring(60, 0, 0, 28), 4.0);
+        eq("near-tangent gives one point", 1, near.size());
+
+        // through the engine: position supplier is used
+        Rig r = new Rig();
+        r.say(ACCEPT_OASIS);
+        r.pos = new double[] {10, 70, 10};
+        r.say("The target is around 20 blocks below, at a 45 degrees angle!");
+        near("engine ring radius", 20.0, r.engine.hints().rings().get(0).radius(), 1e-9);
+        near("engine ring centre y", 50.0, r.engine.hints().rings().get(0).cy(), 1e-9);
+        r.say(ACCEPT_SETTLEMENT);
+        eq("new quest clears hints", 0, r.engine.hints().rings().size());
+    }
+
+    static void testNametag() {
+        NametagParser p = new NametagParser();
+        Optional<NametagInfo> a = p.parse("[Lv3] \u2764\u2764 Endangered Sheep 4,998/5,000\u2764 \u2605", true);
+        check("sheep parsed", a.isPresent());
+        eq("sheep rarity", Rarity.ENDANGERED, a.get().rarity());
+        eq("sheep animal", Animal.SHEEP, a.get().animal());
+        eq("sheep hp", 4998L, a.get().health());
+        eq("sheep max", 5000L, a.get().maxHealth());
+        eq("level", 3, a.get().level());
+        check("plausible health", a.get().plausible());
+        check("shuriken flag passed through", a.get().shuriken());
+        Optional<NametagInfo> b = p.parse("[Lv1] Trackable Cow 100/100\u2764", false);
+        eq("cow rarity", Rarity.TRACKABLE, b.get().rarity());
+        check("no shuriken", !b.get().shuriken());
+        Optional<NametagInfo> c = p.parse("Untrackable Pig 480/500", false);
+        eq("untrackable not confused with trackable", Rarity.UNTRACKABLE, c.get().rarity());
+        check("odd max health flagged", !p.parse("Elusive Rabbit 5/9999", false).get().plausible());
+        check("non-trapper nametag ignored", p.parse("[Lv100] Zealot 13,000/13,000", false).isEmpty());
+        check("null ignored", p.parse(null, false).isEmpty());
+
+        Rig r = new Rig();
+        r.say(ACCEPT_OASIS);
+        r.engine.onNametag(p.parse("Endangered Sheep 100/5000", false).get());
+        check("mismatched rarity ignored", r.engine.tracker().current().get().animal() == null);
+        r.engine.onNametag(p.parse("Trackable Cow 100/100", false).get());
+        eq("matching nametag teaches animal", Animal.COW, r.engine.tracker().current().get().animal());
+        r.advance(10_000);
+        r.say("Killing the animal rewarded you 2 pelts.");
+        eq("animal stored in record", Animal.COW, r.finished.get(0).animal());
+        near("avg by animal", 10_000, r.engine.sessionSnapshot().avgMsByAnimal().get(Animal.COW), 0.01);
+    }
+
+    static void testStorage() throws Exception {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("s", "quote\" back\\slash\nnewline\ttab \u00e9\u4e2d");
+        m.put("l", 1_700_000_000_123L);
+        m.put("d", 1.5e-7);
+        m.put("neg", -42);
+        m.put("b", true);
+        Map<String, Object> back = FlatJson.decode(FlatJson.encode(m));
+        eq("string roundtrip", m.get("s"), back.get("s"));
+        eq("long roundtrip", 1_700_000_000_123L, back.get("l"));
+        near("double roundtrip", 1.5e-7, (Double) back.get("d"), 1e-20);
+        eq("neg roundtrip", -42L, back.get("neg"));
+        eq("bool roundtrip", true, back.get("b"));
+        boolean threw = false;
+        try { FlatJson.decode("{\"a\":1,\"b\":"); } catch (IllegalArgumentException e) { threw = true; }
+        check("truncated json rejected", threw);
+
+        Path dir = Files.createTempDirectory("trapperplus-test");
+        List<String> logs = new ArrayList<>();
+        HistoryStore store = new HistoryStore(dir, logs::add);
+        Rig r = new Rig(store);
+        r.settings.playerName = "Tester";
+        r.say(ACCEPT_OASIS);
+        r.advance(12_000);
+        r.say("Killing the animal rewarded you 2 pelts.");
+        r.advance(3000);
+        r.say(ACCEPT_SETTLEMENT);
+        r.advance(9_000);
+        r.say("Killing the animal rewarded you 4 pelts.");
+        eq("two quests stored", 2, new HistoryStore(dir, logs::add).loadQuests().size());
+
+        // simulate a crash that left a half-written line, then keep working
+        Files.writeString(dir.resolve("quests.jsonl"), "{\"t0\":17000000", StandardOpenOption.APPEND);
+        HistoryStore store2 = new HistoryStore(dir, logs::add);
+        Rig r2 = new Rig(store2);
+        r2.say(ACCEPT_OASIS);
+        r2.advance(7_000);
+        r2.say("Killing the animal rewarded you 2 pelts.");
+        List<QuestRecord> all = new HistoryStore(dir, logs::add).loadQuests();
+        eq("damaged line skipped, new record intact", 3, all.size());
+        eq("loaded duration", 7_000L, all.get(2).durationMs());
+        eq("loaded rarity", Rarity.TRACKABLE, all.get(0).rarity());
+        eq("loaded area", "Desert Settlement", all.get(1).areaName());
+        HistoryStore reader = new HistoryStore(dir, logs::add);
+        reader.loadQuests();
+        eq("one damaged line counted", 1, reader.skippedLines());
+
+        r.engine.resetSession();
+        eq("session summary saved", 1, new HistoryStore(dir, logs::add).loadSessions().size());
+        check("state file written", Files.exists(dir.resolve("state.json")));
+        check("no temp file left behind", !Files.exists(dir.resolve("state.json.tmp")));
+
+        Files.writeString(dir.resolve("state.json"), "{garbage");
+        eq("corrupt state ignored", 0, new HistoryStore(dir, logs::add).readJson("state.json").size());
+
+        Settings s = new Settings();
+        s.setMultiplier(7);
+        eq("multiplier clamped", 3, s.multiplier);
+        s.playerName = "Me";
+        s.warpOverrides.put("OASIS", "/warp x");
+        Settings s2 = Settings.fromMap(FlatJson.decode(FlatJson.encode(s.toMap())));
+        eq("settings roundtrip name", "Me", s2.playerName);
+        eq("settings roundtrip multiplier", 3, s2.multiplier);
+        eq("settings roundtrip warp", "/warp x", s2.warpCommandFor(Area.OASIS));
+    }
+
+    static void testRestartKeepsLuck() throws Exception {
+        Path dir = Files.createTempDirectory("trapperplus-luck");
+        HistoryStore store = new HistoryStore(dir, s -> {});
+        Rig r = new Rig(store);
+        for (int i = 0; i < 3; i++) {
+            r.say(ACCEPT_OASIS);
+            r.advance(5000);
+            r.say("Killing the animal rewarded you 2 pelts.");
+            r.advance(1000);
+        }
+        double chance = r.engine.luck().chanceSinceLastDye();
+        // "restart": new engine over the same folder
+        Rig r2 = new Rig(new HistoryStore(dir, s -> {}));
+        eq("luck progress survives restart", 3L, r2.engine.luck().baseQuestsSinceDye());
+        near("chance survives restart", chance, r2.engine.luck().chanceSinceLastDye(), 1e-15);
+    }
+
+    static void testHudAndBoard() {
+        List<String> board = List.of("SKYBLOCK", "11/19/26 m181AE", "Late Winter 25th", "10:30am",
+                "\u23e3 Overgrown Mushroom Cave", "", "Purse: 22,805,782", "Bits: 70", "",
+                "Tracker Mob Location:", "Overgrown Mushroom Cave", "", "www.hypixel.net");
+        com.trevorplus.quests.TrackerBoard.Result r = com.trevorplus.quests.TrackerBoard.parse(board);
+        check("board active", r.active());
+        eq("board area from next line", "Overgrown Mushroom Cave", r.area());
+        eq("board inline with colour codes", "Oasis",
+                com.trevorplus.quests.TrackerBoard.parse(List.of("\u00a7fTracker Mob Location: \u00a7aOasis")).area());
+        check("board inactive without the line",
+                !com.trevorplus.quests.TrackerBoard.parse(List.of("Purse: 5", "\u23e3 Oasis")).active());
+        eq("key as last line has no area", null,
+                com.trevorplus.quests.TrackerBoard.parse(List.of("Tracker Mob Location:")).area());
+
+        eq("fmt 1:05", "1:05", com.trevorplus.core.Fmt.duration(65_000));
+        eq("fmt hours", "1:01:01", com.trevorplus.core.Fmt.duration(3_661_000));
+        eq("fmt negative", "0:00", com.trevorplus.core.Fmt.duration(-5));
+
+        Rig h = new Rig();
+        String idle = String.join("|", com.trevorplus.core.HudLines.build(h.engine));
+        check("hud idle text", idle.contains("No active quest"));
+        h.say("[NPC] Trevor: Try coming back in 17s!");
+        check("hud cooldown text", String.join("|", com.trevorplus.core.HudLines.build(h.engine)).contains("cooldown 17s"));
+        h.say(ACCEPT_OASIS);
+        h.advance(83_000);
+        String active = String.join("|", com.trevorplus.core.HudLines.build(h.engine));
+        check("hud shows quest", active.contains("Trackable @ Oasis  1:23"));
+        check("hud shows nav target", active.contains("Oasis (/warp desert)"));
+        h.say("Killing the animal rewarded you 2 pelts.");
+        String done = String.join("|", com.trevorplus.core.HudLines.build(h.engine));
+        check("hud pelts", done.contains("Pelts 2"));
+        check("hud quests", done.contains("Quests 1"));
+        check("hud best time", done.contains("Best 1:23"));
+        check("hud dye line", done.contains("Dye: 0.002% chance by now (1 quests, 1x)"));
+        h.engine.pauseSession();
+        check("hud paused tag", com.trevorplus.core.HudLines.build(h.engine).get(0).contains("[paused]"));
+
+        Settings s = new Settings();
+        s.hudVisible = false;
+        s.hudX = 40;
+        s.hudY = 55;
+        Settings s2 = Settings.fromMap(FlatJson.decode(FlatJson.encode(s.toMap())));
+        check("hud settings roundtrip", !s2.hudVisible && s2.hudX == 40 && s2.hudY == 55);
+        check("hud defaults", new Settings().hudVisible && new Settings().hudX == 6);
+    }
+}
