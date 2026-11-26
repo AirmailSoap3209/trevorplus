@@ -27,6 +27,7 @@ Timer, finder, Theodolite aid, alerts and a HUD you can move anywhere.
 | **Cooldown timer** | "Next quest in 0:23", then "Trevor ready". |
 | **Smart warp key** | One key: accept the quest prompt, warp to the mob's area, or warp to the Trapper. |
 | **Built-in editor** | Settings menu with a description for every option, and drag-and-drop placement for every on-screen element. Also reachable from Mod Menu. |
+| **Your colours** | Pick the colour of every rarity (mob box, labels, banners, HUD text) with a colour picker, sliders or a hex code. |
 | **Behind-walls mode** | Mob box, glow and Theodolite blocks: always visible, faded behind walls, or only while in sight. |
 
 ## Trevor+ and Trevor+ Lite

@@ -32,6 +32,7 @@ Minecraft 26.2 · Fabric · requires Fabric API · client-side only
 - One smart warp key (default G): accepts Trevor's prompt, otherwise warps to the quest area, otherwise to the Trapper. One command per press.
 - Built-in menu (`/tp` or `/trevorplus`, or Mod Menu's Configure button), sorted into categories, with a description for every setting.
 - Behind-walls mode for the mob box, glow and Theodolite blocks: always, faded behind walls, or only while in sight.
+- Pick your own colour for each rarity: colour picker, R/G/B sliders or a hex code.
 - Every on-screen element is draggable: both HUDs, the zone panel, the direction line and the alert banner.
 - Everything switches off a minute (configurable) after you leave the Farming Islands, and comes back when you return.
 - Every chat line the mod prints can be switched off.

@@ -35,6 +35,7 @@ Minecraft 26.2 · Fabric · requires Fabric API · client-side only
 - Click to accept: an on-screen button you click once to take Trevor's quest. Lite has no automatic accept: every quest is taken by you.
 - Built-in menu (`/tp`, `/trevorplus`, or Mod Menu's Configure button), sorted into categories, with a description for every setting.
 - Every on-screen element is draggable.
+- Pick your own colour for each rarity: colour picker, R/G/B sliders or a hex code.
 - Everything switches off a while after you leave the Farming Islands, and comes back when you return.
 
 ## Good to know

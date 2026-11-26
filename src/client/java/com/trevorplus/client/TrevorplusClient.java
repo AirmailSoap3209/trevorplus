@@ -105,6 +105,7 @@ public class TrevorplusClient implements ClientModInitializer {
         dir = FabricLoader.getInstance().getConfigDir().resolve("trevorplus");
         store = new HistoryStore(dir, msg -> Trevorplus.LOGGER.warn("[store] {}", msg));   // only problems are reported
         settings = Settings.fromMap(store.readJson("settings.json"));
+        HudLines.useColors(settings);      // custom rarity colours apply everywhere
         engine = new TrapperEngine(Clock.SYSTEM, settings, store, TrevorplusClient::playerPos,
                 new Listener(), msg -> verbose("[engine] {}", msg));
 

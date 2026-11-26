@@ -89,7 +89,21 @@ public final class HudLines {
         return out;
     }
 
+    /** Settings that may hold custom rarity colours; null = defaults only. Set once by the client. */
+    private static volatile com.trevorplus.config.Settings colorSettings;
+
+    public static void useColors(com.trevorplus.config.Settings s) { colorSettings = s; }
+
+    /** Colour of a rarity everywhere (HUD text, mob box, banners): the player's custom colour, else the default. */
     public static int color(Rarity r) {
+        if (r == null) return WHITE;
+        com.trevorplus.config.Settings s = colorSettings;
+        int custom = s == null ? -1 : s.customColor(r);
+        return custom >= 0 ? 0xFF000000 | custom : defaultColor(r);
+    }
+
+    /** The built-in colour of a rarity (ARGB). */
+    public static int defaultColor(Rarity r) {
         if (r == null) return WHITE;
         return switch (r) {
             case TRACKABLE -> 0xFF55FF55;

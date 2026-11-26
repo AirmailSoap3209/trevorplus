@@ -180,7 +180,7 @@ top-face painting that cost most of the FPS.
   release tag other than `v<mod_version>`; a `-prerelease` version is published as a beta. The update check compares
   with semver precedence (pre-releases below their release).
 
-## 2.4.1 – Trevor+ Lite on Modrinth
+## 2.5.0 – Custom rarity colours, Trevor+ Lite on Modrinth
 
 - Lite's update check uses Modrinth's public API (`/v2/project/<id>/version`, filtered to Fabric and the running
   Minecraft version; only listed release versions count) when `modrinth_lite_id` is set; full keeps CurseForge.
@@ -188,3 +188,8 @@ top-face painting that cost most of the FPS.
 - The full version can no longer be published to Modrinth: its Modrinth target and `modrinth_id` are removed, and the
   release workflow no longer looks for them.
 - New Modrinth page text for Lite (`docs/modrinth-description-lite.md`); publishing checklist reworked per site.
+- Custom rarity colours: `Settings.rarityColors` (saved as `color.<RARITY>`: `#RRGGBB`, only when changed);
+  `HudLines.color` returns the custom colour when set, so the mob box, labels, banners and HUD text all follow it.
+  New Colours category and `ColorPickerScreen`: SV square + hue bar (drawn with vertical gradients), R/G/B sliders,
+  a hex field with typing, paste and 3-digit codes, live preview, per-rarity Default. `Colors` (HSV/hex) is tested.
+- Version: 2.4.1 was never released, and this release adds a feature, so it is 2.5.0 (MINOR from 2.4.0).

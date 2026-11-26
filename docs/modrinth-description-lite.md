@@ -40,6 +40,7 @@ Minecraft 26.2 · Fabric · requires [Fabric API](https://modrinth.com/mod/fabri
 - Click to accept: when Trevor offers a quest, a button appears for five seconds; one click takes it.
 - Settings menu sorted into categories, with a description for every option. Open it with `/tp`, `/trevorplus`, or Mod Menu's Configure button.
 - Every panel, banner and button can be dragged to where you want it.
+- Pick your own colour for each rarity: colour picker, R/G/B sliders or a hex code.
 - Everything switches off a while after you leave the Farming Islands, and comes back when you return.
 - Every chat line the mod prints can be switched off.
 

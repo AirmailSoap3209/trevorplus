@@ -86,6 +86,8 @@ public final class Settings {
     public String espMode = EspMode.DIM.name();
     /** Look for a newer release on CurseForge at start-up (one anonymous request). */
     public boolean updateCheck = true;
+    /** Custom rarity colours (0xRRGGBB, by Rarity ordinal); -1 = the built-in colour. Saved as "color.<RARITY>": "#RRGGBB". */
+    public final int[] rarityColors = new int[] {-1, -1, -1, -1, -1};
     /** True once the first-launch welcome screen has been shown (or skipped). */
     public boolean welcomeShown = false;
     /**
@@ -127,6 +129,16 @@ public final class Settings {
             if (x == r ? on : shurikenFor(x)) out.append(out.length() == 0 ? "" : ",").append(x.name());
         }
         shurikenRarities = out.toString();
+    }
+
+    /** The player's colour for a rarity (0xRRGGBB), or -1 when it is the built-in one. */
+    public int customColor(com.trevorplus.quests.Rarity r) {
+        return r == null || r.ordinal() >= rarityColors.length ? -1 : rarityColors[r.ordinal()];
+    }
+
+    /** Sets a custom colour (0xRRGGBB); a negative value goes back to the built-in colour. */
+    public void setCustomColor(com.trevorplus.quests.Rarity r, int rgb) {
+        if (r != null && r.ordinal() < rarityColors.length) rarityColors[r.ordinal()] = rgb < 0 ? -1 : rgb & 0xFFFFFF;
     }
 
     /** Behind-walls mode; falls back to Dim if the saved text is not a mode. */
@@ -198,6 +210,9 @@ public final class Settings {
         m.put("shurikenRarities", shurikenRarities);
         m.put("espMode", espMode);
         m.put("updateCheck", updateCheck);
+        for (com.trevorplus.quests.Rarity r : com.trevorplus.quests.Rarity.values()) {
+            if (customColor(r) >= 0) m.put("color." + r.name(), Colors.hex(customColor(r)));
+        }
         m.put("welcomeShown", welcomeShown);
         if (debugMode) m.put("debugMode", true);      // stays out of the file unless someone turned it on
         for (Map.Entry<String, String> e : warpOverrides.entrySet()) m.put("warp." + e.getKey(), e.getValue());
@@ -257,6 +272,9 @@ public final class Settings {
         // upgraders keep the old always-through-walls look; new installs start on Dim
         s.espMode = FlatJson.str(m, "espMode", (m.isEmpty() ? EspMode.DIM : EspMode.ALWAYS).name());
         s.updateCheck = FlatJson.bool(m, "updateCheck", true);
+        for (com.trevorplus.quests.Rarity r : com.trevorplus.quests.Rarity.values()) {
+            s.setCustomColor(r, Colors.parseHex(FlatJson.str(m, "color." + r.name(), "")));
+        }
         // an existing settings file without the key belongs to someone upgrading: do not greet them as new
         s.welcomeShown = FlatJson.bool(m, "welcomeShown", !m.isEmpty());
         s.debugMode = FlatJson.bool(m, "debugMode", false);

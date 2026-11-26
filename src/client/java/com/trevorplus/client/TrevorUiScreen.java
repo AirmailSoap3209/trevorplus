@@ -1,6 +1,7 @@
 package com.trevorplus.client;
 
 import com.trevorplus.config.AcceptMode;
+import com.trevorplus.config.Colors;
 import com.trevorplus.config.EspMode;
 import com.trevorplus.config.Settings;
 import com.trevorplus.core.HudLines;
@@ -215,6 +216,21 @@ final class TrevorUiScreen extends Screen {
         alerts.add(toggle("Trevor-ready ping", "Banner and sound when the cooldown is over and you can take the next quest.",
                 () -> s.readyPing, v -> s.readyPing = v));
         categories.add(new Category("Alerts", "Banners and sounds for the moments that matter.", alerts));
+
+        List<Row> colours = new ArrayList<>();
+        for (Rarity r : Rarity.values()) {
+            Runnable open = () -> Minecraft.getInstance().gui.setScreen(new ColorPickerScreen(this, r));
+            colours.add(new Row(Kind.ACTION, r.label(), "Colour of " + r.label() + " mobs: the mob box, its label, banners "
+                    + "and HUD text. Click to open the colour picker.",
+                    () -> Colors.hex(HudLines.color(r) & 0xFFFFFF) + (s.customColor(r) >= 0 ? "" : "  default"),
+                    () -> HudLines.color(r), open, open, 0, () -> true));
+        }
+        colours.add(header("Reset"));
+        colours.add(action("Default colours", "reset", "Puts every rarity back to its built-in colour.", () -> {
+            for (Rarity r : Rarity.values()) s.setCustomColor(r, -1);
+            save();
+        }));
+        categories.add(new Category("Colours", "Rarity colours for the mob box, banners and HUD text.", colours));
 
         List<Row> chat = new ArrayList<>();
         chat.add(toggle("Mob found", "A chat line when the quest mob is found, with its distance.",

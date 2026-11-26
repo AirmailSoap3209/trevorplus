@@ -1056,6 +1056,41 @@ check("server hop saves nothing", r6.finished.isEmpty());
         wd.setNavDelayMs(4500);
         eq("delay roundtrip", 4500L, Settings.fromMap(FlatJson.decode(FlatJson.encode(wd.toMap()))).navMinIntervalMs);
 
+        // colours: hex, HSV, custom rarity colours
+        eq("hex format", "#FFAA00", com.trevorplus.config.Colors.hex(0xFFAA00));
+        eq("hex parse", 0xFFAA00, com.trevorplus.config.Colors.parseHex("#ffaa00"));
+        eq("hex parse no hash", 0x12AB9F, com.trevorplus.config.Colors.parseHex("12AB9F"));
+        eq("hex short form", 0xFFAA00, com.trevorplus.config.Colors.parseHex("#fa0"));
+        check("bad hex", com.trevorplus.config.Colors.parseHex("#GG0000") == -1 && com.trevorplus.config.Colors.parseHex("#12345") == -1 && com.trevorplus.config.Colors.parseHex("") == -1 && com.trevorplus.config.Colors.parseHex(null) == -1);
+        eq("hsv red", 0xFF0000, com.trevorplus.config.Colors.hsvToRgb(0, 1, 1));
+        eq("hsv green", 0x00FF00, com.trevorplus.config.Colors.hsvToRgb(120, 1, 1));
+        eq("hsv blue", 0x0000FF, com.trevorplus.config.Colors.hsvToRgb(240, 1, 1));
+        eq("hsv white", 0xFFFFFF, com.trevorplus.config.Colors.hsvToRgb(200, 0, 1));
+        eq("hsv black", 0x000000, com.trevorplus.config.Colors.hsvToRgb(77, 0.5f, 0));
+        eq("hue wraps", 0xFF0000, com.trevorplus.config.Colors.hsvToRgb(360, 1, 1));
+        boolean roundTrip = true;
+        for (int c : new int[] {0xFFAA00, 0x55AAFF, 0xC080FF, 0x123456, 0x808080, 0x000000, 0xFFFFFF, 0x01FE7F}) {
+            float[] hsv = com.trevorplus.config.Colors.rgbToHsv(c);
+            roundTrip &= com.trevorplus.config.Colors.hsvToRgb(hsv[0], hsv[1], hsv[2]) == c;
+        }
+        check("rgb -> hsv -> rgb", roundTrip);
+        eq("rgb clamps", 0xFF0000, com.trevorplus.config.Colors.rgb(300, -5, 0));
+        Settings cs = new Settings();
+        check("no custom colours by default", java.util.Arrays.stream(Rarity.values()).allMatch(x -> cs.customColor(x) == -1));
+        check("defaults unchanged", com.trevorplus.core.HudLines.color(Rarity.ELUSIVE) == 0xFFFF5555 && com.trevorplus.core.HudLines.color(Rarity.ENDANGERED) == 0xFFFFAA00);
+        cs.setCustomColor(Rarity.ELUSIVE, 0x00FFCC);
+        com.trevorplus.core.HudLines.useColors(cs);
+        eq("custom colour used everywhere", 0xFF00FFCC, com.trevorplus.core.HudLines.color(Rarity.ELUSIVE));
+        eq("others keep default", 0xFFFFAA00, com.trevorplus.core.HudLines.color(Rarity.ENDANGERED));
+        Settings cs2 = Settings.fromMap(FlatJson.decode(FlatJson.encode(cs.toMap())));
+        check("custom colour roundtrip", cs2.customColor(Rarity.ELUSIVE) == 0x00FFCC && cs2.customColor(Rarity.TRACKABLE) == -1);
+        check("only changed colours saved", cs.toMap().containsKey("color.ELUSIVE") && !cs.toMap().containsKey("color.TRACKABLE"));
+        cs.setCustomColor(Rarity.ELUSIVE, -1);
+        eq("reset to default", 0xFFFF5555, com.trevorplus.core.HudLines.color(Rarity.ELUSIVE));
+        java.util.Map<String, Object> junkColor = new java.util.LinkedHashMap<>(); junkColor.put("color.ELUSIVE", "purple");
+        eq("unreadable saved colour ignored", -1, Settings.fromMap(junkColor).customColor(Rarity.ELUSIVE));
+        com.trevorplus.core.HudLines.useColors(null);
+
         // shuriken tiers
         Settings sk = new Settings();
         check("shuriken all tiers by default", java.util.Arrays.stream(Rarity.values()).allMatch(sk::shurikenFor) && sk.shurikenFor(null));
