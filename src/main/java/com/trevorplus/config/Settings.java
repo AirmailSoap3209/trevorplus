@@ -19,7 +19,9 @@ public final class Settings {
     /** 6 normally, 7 with Enderman Slayer IX. */
     public int elusiveWeight = 6;
     public int idleTimeoutSeconds = 300;
+    /** Smallest gap between two warp-key actions, in ms: 0.5 s steps from NAV_DELAY_MIN_MS to NAV_DELAY_MAX_MS. */
     public long navMinIntervalMs = 3000;
+    public static final long NAV_DELAY_MIN_MS = 500, NAV_DELAY_MAX_MS = 10_000, NAV_DELAY_STEP_MS = 500;
     public boolean navAcceptPrompt = true;
     public boolean navWarpArea = true;
     public boolean navWarpTrapper = true;
@@ -133,6 +135,12 @@ public final class Settings {
         return m == null ? EspMode.DIM : m;
     }
 
+    /** Sets the warp-key delay, rounded to the nearest 0.5 s and kept between 0.5 s and 10 s. */
+    public void setNavDelayMs(long ms) {
+        long rounded = Math.round(ms / (double) NAV_DELAY_STEP_MS) * NAV_DELAY_STEP_MS;
+        navMinIntervalMs = Math.max(NAV_DELAY_MIN_MS, Math.min(NAV_DELAY_MAX_MS, rounded));
+    }
+
     public void setMultiplier(int m) { multiplier = Math.max(1, Math.min(3, m)); }
 
     public String warpCommandFor(Area area) {
@@ -204,7 +212,7 @@ public final class Settings {
         s.selfDeathCountsForDye = FlatJson.bool(m, "selfDeathCountsForDye", false);
         s.elusiveWeight = (int) FlatJson.lng(m, "elusiveWeight", 6);
         s.idleTimeoutSeconds = (int) FlatJson.lng(m, "idleTimeoutSeconds", 300);
-        s.navMinIntervalMs = FlatJson.lng(m, "navMinIntervalMs", 3000);
+        s.setNavDelayMs(FlatJson.lng(m, "navMinIntervalMs", 3000));
         s.navAcceptPrompt = FlatJson.bool(m, "navAcceptPrompt", true);
         s.navWarpArea = FlatJson.bool(m, "navWarpArea", true);
         s.navWarpTrapper = FlatJson.bool(m, "navWarpTrapper", true);

@@ -2,7 +2,7 @@
 
 **Trevor+ without ESP: a pelt-grinding companion for Hypixel SkyBlock's Trevor the Trapper.**
 
-Everything that makes Trevor+ useful (quest timing, pelts per hour, dye odds, alerts, the Theodolite aid), without the features that show you things through walls. There is no mob box, no glow outline and no direction line, and Theodolite blocks are only drawn where you can actually see them. That code is not switched off: it is not in this jar at all.
+Everything that makes Trevor+ useful (quest timing, pelts per hour, dye odds, alerts, the Theodolite aid), without anything that shows you things through walls. The quest mob is boxed only while it is on your screen and in direct sight, and Theodolite blocks are only drawn where you can actually see them. There is no glow outline, no direction line, no off-screen pointer and no automatic accept. That code is not switched off: it is not in this jar at all.
 
 Want the mob finder too? Get the full **Trevor+**. The two are updated together and share their settings and stats, but only one can be installed at a time.
 
@@ -17,6 +17,9 @@ Minecraft 26.2 · Fabric · requires Fabric API · client-side only
 - Cooldown timer: "Next quest in 0:23", then "Trevor ready".
 - Zone panel: the zone Trevor's mob is in, the zone you are in, and a green bar when they match.
 
+**Mob finder**
+- Boxes the quest mob with its name and distance, **only while it is on your screen and in sight**: the moment a wall is in the way, the box is gone.
+
 **Theodolite aid**
 - Reads Trevor's hints, estimates the Y level and highlights the blocks at that height, **only where you can see them**: walls hide the boxes.
 - Optional dotted hint rings.
@@ -28,8 +31,8 @@ Minecraft 26.2 · Fabric · requires Fabric API · client-side only
 
 **Controls and comfort**
 - A welcome screen on first launch that sets up the essentials in a few clicks.
-- One smart warp key (default G): accepts Trevor's prompt, otherwise warps to the quest area, otherwise to the Trapper. One command per press.
-- Click to accept: an on-screen button you click once to take Trevor's quest. No automation needed.
+- One smart warp key (default G): accepts Trevor's prompt, otherwise warps to the quest area, otherwise to the Trapper. One command per press, with an adjustable delay between presses.
+- Click to accept: an on-screen button you click once to take Trevor's quest. Lite has no automatic accept: every quest is taken by you.
 - Built-in menu (`/tp`, `/trevorplus`, or Mod Menu's Configure button), sorted into categories, with a description for every setting.
 - Every on-screen element is draggable.
 - Everything switches off a while after you leave the Farming Islands, and comes back when you return.

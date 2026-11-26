@@ -2,7 +2,7 @@
 <p style="text-align: center;"><strong>Trevor+ without ESP: a pelt-grinding companion for Hypixel SkyBlock's Trevor the Trapper.</strong></p>
 <p style="text-align: center;">Minecraft 26.2 &middot; Fabric &middot; requires Fabric API &middot; client-side only</p>
 <hr />
-<p>Everything that makes Trevor+ useful (quest timing, <strong>pelts per hour</strong>, dye odds, alerts, the Theodolite aid), without the features that show you things through walls. There is no mob box, no glow outline and no direction line, and Theodolite blocks are only drawn where you can actually see them. That code is not switched off: <strong>it is not in this jar at all</strong>.</p>
+<p>Everything that makes Trevor+ useful (quest timing, <strong>pelts per hour</strong>, dye odds, alerts, the Theodolite aid), without anything that shows you things through walls. The quest mob is boxed only while it is on your screen and in direct sight, and Theodolite blocks are only drawn where you can actually see them. There is no glow outline, no direction line, no off-screen pointer and no automatic accept. That code is not switched off: <strong>it is not in this jar at all</strong>.</p>
 <p>Want the mob finder too? Get the full <strong>Trevor+</strong>. The two are updated together and share their settings and stats, but only one can be installed at a time.</p>
 
 <h2>Features</h2>
@@ -14,6 +14,11 @@
 <li><strong>Creature HUD:</strong> how many of each rarity you have gotten (session and total), creatures since the last Elusive, and the expected gap.</li>
 <li><strong>Cooldown timer:</strong> "Next quest in 0:23", then "Trevor ready".</li>
 <li><strong>Zone panel:</strong> the zone Trevor's mob is in, the zone you are in, and a green bar when they match.</li>
+</ul>
+
+<h3>🔍 Mob finder</h3>
+<ul>
+<li>Boxes the quest mob with its name and distance, <strong>only while it is on your screen and in sight</strong>: the moment a wall is in the way, the box is gone.</li>
 </ul>
 
 <h3>📐 Theodolite aid</h3>
@@ -32,8 +37,8 @@
 <h3>⚙️ Controls and comfort</h3>
 <ul>
 <li>A <strong>welcome screen</strong> on first launch that sets up the essentials in a few clicks.</li>
-<li><strong>One smart warp key</strong> (default <strong>G</strong>): accepts Trevor's prompt, otherwise warps to the quest area, otherwise to the Trapper. One command per press.</li>
-<li><strong>Click to accept:</strong> an on-screen button you click once to take Trevor's quest. No automation needed.</li>
+<li><strong>One smart warp key</strong> (default <strong>G</strong>): accepts Trevor's prompt, otherwise warps to the quest area, otherwise to the Trapper. One command per press, with an adjustable delay between presses.</li>
+<li><strong>Click to accept:</strong> an on-screen button you click once to take Trevor's quest. Lite has no automatic accept: every quest is taken by you.</li>
 <li><strong>Built-in menu</strong> (<code>/tp</code>, <code>/trevorplus</code>, or Mod Menu's Configure button), sorted into categories, with a description for every setting.</li>
 <li><strong>Every on-screen element is draggable.</strong></li>
 <li>Everything switches off a while after you leave the Farming Islands, and comes back when you return.</li>

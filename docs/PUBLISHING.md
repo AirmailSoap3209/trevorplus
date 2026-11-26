@@ -48,9 +48,27 @@ Repository **Settings > Secrets and variables > Actions**:
 
 Never commit these.
 
+## Versioning
+
+Trevor+ uses [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`, counted from the last **published**
+release, with no numbers skipped.
+
+| Bump | When | Example |
+|---|---|---|
+| PATCH | Fixes only, nothing new | 2.4.0 → 2.4.1 |
+| MINOR | New features or settings; existing settings, commands and saved data keep working | 2.4.1 → 2.5.0 |
+| MAJOR | Something stops working the old way: a feature, setting or command is removed or changes meaning, or saved data is not read any more | 2.5.0 → 3.0.0 |
+
+- The version is plain, e.g. `2.4.0`. No `+26.2`: the Minecraft version is stated in `fabric.mod.json` and on each upload.
+- Pre-releases are `2.5.0-beta.1`, `2.5.0-rc.1` and so on. They are published as betas, and the in-game update notice
+  ignores them.
+- The GitHub release tag is always `v` + the version (`v2.4.0`). The publish workflow stops if they differ, and the
+  build refuses a `mod_version` that is not semver.
+- Porting to a new Minecraft version with no other changes is a MINOR bump.
+
 ## Every release
 
-1. Bump `mod_version` in `gradle.properties` (the published version becomes `<mod_version>+26.2`).
+1. Bump `mod_version` in `gradle.properties` following the table above.
 2. Replace `docs/RELEASE-NOTES.md` with this release's changes (it becomes the changelog on both sites),
    and add a section to `docs/CHANGELOG.md`.
 3. Check locally:
@@ -61,8 +79,8 @@ Never commit these.
    ```
    Load `build/libs/trevorplus-<version>.jar` in a fresh 26.2 instance: the welcome screen should open once on the
    first world join, and `/trevorplus help` should list no `debug` section. Then do the same with
-   `trevorplus-lite-<version>.jar`: no mob box, glow or direction line, and no "Behind walls" setting.
-4. Commit, push, then create a GitHub release with tag `v<mod_version>`. The publish workflow uploads to both sites and
+   `trevorplus-lite-<version>.jar`: the mob box shows only while the mob is in sight, no glow, direction line or off-screen pointer, and no "Behind walls" setting or Automatic accept.
+4. Commit, push, then create a GitHub release with tag `v<mod_version>` (e.g. `v2.4.0`). The publish workflow uploads to both sites and
    attaches the jars to the release.
 
 To publish from your own machine instead, set `MODRINTH_TOKEN` / `CURSEFORGE_TOKEN` in the environment and run

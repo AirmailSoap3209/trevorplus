@@ -23,6 +23,19 @@ jobs:
           distribution: 'microsoft'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
+      - name: check version
+        # mod_version must be semantic versioning, and a release's tag must be exactly v<mod_version>
+        run: |
+          v=$(sed -n 's/^mod_version=//p' gradle.properties | tr -d '[:space:]')
+          if ! echo "$v" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
+            echo "::error::mod_version '$v' is not semantic versioning (MAJOR.MINOR.PATCH, e.g. 2.4.0)."
+            exit 1
+          fi
+          if [ "${{ github.event_name }}" = "release" ] && [ "${{ github.event.release.tag_name }}" != "v$v" ]; then
+            echo "::error::The release tag is '${{ github.event.release.tag_name }}' but gradle.properties says $v. Tag the release v$v (or fix mod_version)."
+            exit 1
+          fi
+          echo "Publishing version $v"
       - name: check publishing setup
         # Without this, a missing project ID or token makes publishMods skip that site and still "succeed".
         env:

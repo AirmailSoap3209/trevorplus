@@ -140,7 +140,7 @@ top-face painting that cost most of the FPS.
 - Modrinth and CurseForge publishing via `./gradlew publishMods` and a release workflow (docs/PUBLISHING.md).
 - `tools/run-tests.sh` works on Windows (Git Bash) too, and CI runs it.
 
-## 2.4.0 – Behind-walls mode, Mod Menu, update notice
+## 2.4.0 – Trevor+ Lite, new menu, behind-walls mode, Mod Menu, update notice
 
 - ESP mode (`espMode`): Always / Dim behind walls / Only when visible, for the mob box and edge pointer, the glow
   outline and the 3D Theodolite blocks. Line of sight to the mob is a block walk every other tick (same test as the
@@ -159,8 +159,6 @@ top-face painting that cost most of the FPS.
   `autoaccept on|off` kept as an alias.
 - Shuriken reminder per rarity (`shurikenRarities`, all by default): menu rows and `/trevorplus shuriken tier <rarity>`.
 
-## 2.5.0 – Trevor+ Lite
-
 - Second variant, Trevor+ Lite (mod id `trevorplus-lite`), from the same sources. The build generates
   `BuildFlags` (ESP, MOD_ID, NAME) per variant; `compileLiteClientJava` + `processLiteResources` + `liteJar` build the
   lite jar, and `build` produces both. ESP code is guarded by `if (BuildFlags.ESP)` so javac drops it from the lite
@@ -170,3 +168,14 @@ top-face painting that cost most of the FPS.
 - `fabric.mod.json` is a template now (id, name, description, `breaks` on the other variant, CurseForge id/slug).
 - Publishing: `modrinthLite` / `curseforgeLite` targets with their own jar and display name; the release workflow's
   setup check covers them.
+- Lite also drops the Automatic accept mode (`BuildFlags.AUTOMATION = false`): the auto-accept call, the `autoaccept`
+  alias and the menu option are compiled out, and a carried-over AUTO setting counts as MANUAL (`AcceptMode.allowing`).
+- Warp key delay (`navMinIntervalMs`) is configurable in both: menu row and `/trevorplus warpdelay <seconds>`,
+  0.5 to 10 s in 0.5 s steps, default 3 s; saved values are rounded and clamped on load.
+- Lite keeps the mob box, but only while the mob is on screen and in line of sight (ESP mode fixed to VISIBLE via
+  `espMode()`); the direction line and the off-screen edge pointer stay compiled out, and so does the glow outline
+  (vanilla draws the whole silhouette over walls). Mob highlight toggle and `highlight` command are back in Lite.
+- Versioning: plain semantic versions from now on (`2.4.0`, not `2.4.0+26.2`, which CurseForge turned into a
+  pre-release-looking `-26.2` file name). The build and the release workflow reject a non-semver `mod_version` and a
+  release tag other than `v<mod_version>`; a `-prerelease` version is published as a beta. The update check compares
+  with semver precedence (pre-releases below their release).

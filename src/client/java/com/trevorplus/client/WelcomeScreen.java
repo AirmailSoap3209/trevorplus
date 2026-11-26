@@ -60,9 +60,11 @@ final class WelcomeScreen extends Screen {
                 () -> s.soundEnabled ? "ON" : "OFF", () -> s.soundEnabled ? HudLines.GOOD : HudLines.BAD,
                 () -> { s.soundEnabled = !s.soundEnabled; save(); }));
         rows.add(new Row("Accept quests", "Warp key / chat: press the warp key or click [YES]. Click to accept: a button "
-                + "appears, one left click takes the quest. Automatic: sent for you (check the server's rules first).",
-                () -> s.accept().label, () -> s.accept() == AcceptMode.AUTO ? HudLines.WARN : HudLines.GOOD,
-                () -> { s.acceptMode = s.accept().next().name(); save(); }));
+                + "appears, one left click takes the quest."
+                + (BuildFlags.AUTOMATION ? " Automatic: sent for you (check the server's rules first)." : ""),
+                () -> TrevorplusClient.acceptMode().label,
+                () -> TrevorplusClient.acceptMode() == AcceptMode.AUTO ? HudLines.WARN : HudLines.GOOD,
+                () -> { s.acceptMode = TrevorplusClient.acceptMode().next(BuildFlags.AUTOMATION).name(); save(); }));
         rows.add(new Row("Smart warp key", "One press accepts Trevor's prompt, otherwise warps to the quest area, otherwise "
                 + "to the Trapper. Rebind it under Options > Controls > Key Binds > Trevor+.",
                 TrevorplusClient::navKeyName, () -> HudLines.GOLD, () -> { }));

@@ -3,7 +3,14 @@ plugins {
 	id 'me.modmuss50.mod-publish-plugin' version '0.8.4'
 }
 
-version = "${project.mod_version}+${project.minecraft_version}"
+// Semantic versioning, checked here so a bad version can never be built or published (see gradle.properties)
+def SEMVER = ~/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-((0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?$/
+if (!(project.mod_version ==~ SEMVER)) {
+	throw new GradleException("mod_version '${project.mod_version}' is not semantic versioning: use MAJOR.MINOR.PATCH, "
+			+ "optionally with -prerelease (e.g. 2.4.0 or 2.5.0-beta.1), and no +build part")
+}
+def isPrerelease = project.mod_version.contains("-")
+version = project.mod_version
 base {
 	archivesName = project.archives_base_name
 }
@@ -46,6 +53,7 @@ dependencies {
 
 abstract class GenerateBuildFlags extends DefaultTask {
 	@Input abstract Property<Boolean> getEsp()
+	@Input abstract Property<Boolean> getAutomation()
 	@Input abstract Property<String> getModId()
 	@Input abstract Property<String> getModName()
 	@OutputDirectory abstract DirectoryProperty getOutputDir()
@@ -62,6 +70,8 @@ final class BuildFlags {
 
     /** False in Trevor+ Lite: every ESP feature is compiled out. */
     static final boolean ESP = ${esp.get()};
+    /** False in Trevor+ Lite: no Automatic accept mode (it would send a command without the player acting). */
+    static final boolean AUTOMATION = ${automation.get()};
     static final String MOD_ID = "${modId.get()}";
     static final String NAME = "${modName.get()}";
 }
@@ -71,12 +81,14 @@ final class BuildFlags {
 
 def fullFlags = tasks.register("generateBuildFlags", GenerateBuildFlags) {
 	esp = true
+	automation = true
 	modId = "trevorplus"
 	modName = "Trevor+"
 	outputDir = layout.buildDirectory.dir("generated/flags/full")
 }
 def liteFlags = tasks.register("generateLiteBuildFlags", GenerateBuildFlags) {
 	esp = false
+	automation = false
 	modId = "trevorplus-lite"
 	modName = "Trevor+ Lite"
 	outputDir = layout.buildDirectory.dir("generated/flags/lite")
@@ -170,7 +182,7 @@ publishMods {
 	displayName = "Trevor+ ${project.mod_version}"
 	version = project.version.toString()
 	changelog = providers.fileContents(layout.projectDirectory.file("docs/RELEASE-NOTES.md")).asText
-	type = STABLE
+	type = isPrerelease ? BETA : STABLE      // 2.5.0-beta.1 goes out as a beta, never as the latest release
 	modLoaders.add("fabric")
 	dryRun = !(modrinthToken.isPresent() || curseforgeToken.isPresent())
 

@@ -1036,6 +1036,26 @@ check("server hop saves nothing", r6.finished.isEmpty());
         eq("click hands out the command", "/chatprompt abc YES", cl.engine.takePrompt());
         check("countdown gone after accepting", cl.engine.promptRemainingMs() == 0);
 
+        // lite: no Automatic
+        eq("cycle skips auto", com.trevorplus.config.AcceptMode.MANUAL, com.trevorplus.config.AcceptMode.CLICK.next(false));
+        eq("cycle back skips auto", com.trevorplus.config.AcceptMode.CLICK, com.trevorplus.config.AcceptMode.MANUAL.previous(false));
+        eq("full cycle keeps auto", com.trevorplus.config.AcceptMode.AUTO, com.trevorplus.config.AcceptMode.CLICK.next(true));
+        eq("carried-over auto becomes manual", com.trevorplus.config.AcceptMode.MANUAL, com.trevorplus.config.AcceptMode.AUTO.allowing(false));
+        eq("auto stays when allowed", com.trevorplus.config.AcceptMode.AUTO, com.trevorplus.config.AcceptMode.AUTO.allowing(true));
+        eq("click unaffected", com.trevorplus.config.AcceptMode.CLICK, com.trevorplus.config.AcceptMode.CLICK.allowing(false));
+
+        // warp-key delay
+        eq("warp delay default", 3000L, new Settings().navMinIntervalMs);
+        Settings wd = new Settings();
+        wd.setNavDelayMs(1700); eq("rounds to half seconds", 1500L, wd.navMinIntervalMs);
+        wd.setNavDelayMs(1800); eq("rounds up to half seconds", 2000L, wd.navMinIntervalMs);
+        wd.setNavDelayMs(100); eq("minimum half a second", 500L, wd.navMinIntervalMs);
+        wd.setNavDelayMs(60_000); eq("maximum ten seconds", 10_000L, wd.navMinIntervalMs);
+        java.util.Map<String, Object> badDelay = new java.util.LinkedHashMap<>(); badDelay.put("navMinIntervalMs", 0L);
+        eq("bad saved delay is clamped", 500L, Settings.fromMap(badDelay).navMinIntervalMs);
+        wd.setNavDelayMs(4500);
+        eq("delay roundtrip", 4500L, Settings.fromMap(FlatJson.decode(FlatJson.encode(wd.toMap()))).navMinIntervalMs);
+
         // shuriken tiers
         Settings sk = new Settings();
         check("shuriken all tiers by default", java.util.Arrays.stream(Rarity.values()).allMatch(sk::shurikenFor) && sk.shurikenFor(null));
@@ -1079,6 +1099,19 @@ check("server hop saves nothing", r6.finished.isEmpty());
                 new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.6.0", "x.jar", 4, 2, java.util.List.of("26.2")),       // beta
                 new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.7.0", "x.jar", 4, 1, java.util.List.of("26.3")),       // other MC
                 new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.4.0", "x.jar", 4, 1, java.util.List.of("Fabric", "26.2")));
+        // semantic-versioning precedence, the semver.org example chain
+        String[] chain = {"1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2",
+                "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "1.0.1", "1.1.0", "2.0.0"};
+        boolean ordered = true;
+        for (int i = 0; i + 1 < chain.length; i++) {
+            ordered &= com.trevorplus.update.Versions.compare(chain[i], chain[i + 1]) < 0 && com.trevorplus.update.Versions.compare(chain[i + 1], chain[i]) > 0;
+        }
+        check("semver precedence chain", ordered);
+        check("pre-release below its release", com.trevorplus.update.Versions.compare("2.4.0-beta.1", "2.4.0") < 0 && !com.trevorplus.update.Versions.isNewer("2.4.0-beta.1", "2.4.0"));
+        check("build metadata ignored", com.trevorplus.update.Versions.compare("2.4.0+26.2", "2.4.0+build.7") == 0);
+        check("semver accepted", com.trevorplus.update.Versions.isSemver("2.4.0") && com.trevorplus.update.Versions.isSemver("1.0.0-rc.1") && com.trevorplus.update.Versions.isSemver("0.1.0"));
+        check("not semver rejected", !com.trevorplus.update.Versions.isSemver("2.4") && !com.trevorplus.update.Versions.isSemver("v2.4.0") && !com.trevorplus.update.Versions.isSemver("02.4.0")
+                && !com.trevorplus.update.Versions.isSemver("2.4.0-") && !com.trevorplus.update.Versions.isSemver("Release2"));
         eq("newest usable release", "2.4.0", com.trevorplus.update.Versions.newest(files, "26.2"));
         check("nothing for unknown MC", com.trevorplus.update.Versions.newest(files, "1.8.9") == null);
         check("newer than running", com.trevorplus.update.Versions.isNewer("2.4.0", "2.3.0+26.2"));

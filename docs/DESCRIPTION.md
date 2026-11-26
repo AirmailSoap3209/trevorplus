@@ -6,7 +6,7 @@ Trevor+ takes the busywork out of Trevor the Trapper. It times your quests, find
 
 Minecraft 26.2 · Fabric · requires Fabric API · client-side only
 
-*Prefer no ESP at all? **Trevor+ Lite** has everything except the mob box, glow outline and direction line, and is updated together with this one.*
+*Prefer no ESP at all? **Trevor+ Lite** boxes the mob only while it is in sight, has no glow outline or direction line, and is updated together with this one.*
 
 ## Features
 

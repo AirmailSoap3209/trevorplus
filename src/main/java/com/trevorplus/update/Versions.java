@@ -33,19 +33,42 @@ public final class Versions {
         return plus < 0 ? version : version.substring(0, plus);
     }
 
-    /** Numeric comparison of dotted versions; missing parts count as 0, non-numbers as 0. */
+    /** Semantic Versioning 2.0.0, with an optional pre-release and build part. */
+    public static final Pattern SEMVER = Pattern.compile(
+            "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)"
+            + "(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?"
+            + "(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$");
+
+    public static boolean isSemver(String v) { return v != null && SEMVER.matcher(v).matches(); }
+
+    /**
+     * Semantic-versioning precedence (semver.org, section 11): MAJOR.MINOR.PATCH compared as numbers
+     * (missing parts count as 0), a pre-release sorts before the release it leads to, pre-release
+     * identifiers compare one by one (numbers numerically and below text), and build metadata is ignored.
+     */
     public static int compare(String a, String b) {
-        String[] x = core(a).split("[.-]"), y = core(b).split("[.-]");
-        for (int i = 0; i < Math.max(x.length, y.length); i++) {
-            int p = i < x.length ? num(x[i]) : 0, q = i < y.length ? num(y[i]) : 0;
-            if (p != q) return Integer.compare(p, q);
+        String x = core(a), y = core(b);
+        int dx = x.indexOf('-'), dy = y.indexOf('-');
+        String[] nx = (dx < 0 ? x : x.substring(0, dx)).split("\\."), ny = (dy < 0 ? y : y.substring(0, dy)).split("\\.");
+        for (int i = 0; i < 3; i++) {
+            long p = i < nx.length ? num(nx[i]) : 0, q = i < ny.length ? num(ny[i]) : 0;
+            if (p != q) return Long.compare(p, q);
         }
-        return 0;
+        if (dx < 0 || dy < 0) return dx < 0 ? (dy < 0 ? 0 : 1) : -1;     // a release outranks its pre-releases
+        String[] px = x.substring(dx + 1).split("\\."), py = y.substring(dy + 1).split("\\.");
+        for (int i = 0; i < Math.min(px.length, py.length); i++) {
+            boolean ax = px[i].matches("\\d+"), ay = py[i].matches("\\d+");
+            int c = ax && ay ? Long.compare(num(px[i]), num(py[i]))
+                    : ax != ay ? (ax ? -1 : 1)
+                    : px[i].compareTo(py[i]);
+            if (c != 0) return c;
+        }
+        return Integer.compare(px.length, py.length);
     }
 
-    private static int num(String s) {
+    private static long num(String s) {
         try {
-            return Integer.parseInt(s);
+            return Long.parseLong(s);
         } catch (NumberFormatException e) {
             return 0;
         }

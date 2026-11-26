@@ -38,7 +38,9 @@ Every release comes in two versions, built from the same code and published toge
 | Quest HUD, stats, dye odds, zone panel, cooldown | ✔ | ✔ |
 | Alerts, sounds, Shuriken reminder, accept modes, warp key | ✔ | ✔ |
 | Theodolite block highlight | ✔ (choose how it shows behind walls) | ✔ (visible blocks only, walls hide them) |
-| Mob box, glow outline, direction line, behind-walls setting | ✔ | not included |
+| Mob box | ✔ (choose how it shows behind walls) | ✔ (only while the mob is on screen and in sight) |
+| Glow outline, direction line, off-screen pointer, behind-walls setting | ✔ | not included |
+| Automatic quest accept | ✔ (off by default) | not included (warp key and click to accept only) |
 
 In Lite the ESP code is compiled out, not just switched off. Both use the same `config/trevorplus/` folder, so you can switch between them and keep your stats, but only one can be installed at a time.
 
@@ -84,7 +86,8 @@ In Lite the ESP code is compiled out, not just switched off. Both use the same `
 | | `autohide [seconds]` | Toggle auto-hide, or set how long you can be away first |
 | | `shuriken on\|off\|learn\|clear` | Reminder and the Shuriken icon marker |
 | | `shuriken tier <rarity>` | Switch the reminder on or off for one rarity (all on by default) |
-| | `accept manual\|click\|auto` | How Trevor's `[YES]` is accepted: warp key or chat (default), an on-screen click, or automatically |
+| | `accept manual\|click\|auto` | How Trevor's `[YES]` is accepted: warp key or chat (default), an on-screen click, or automatically (`auto` is not in Lite) |
+| | `warpdelay <seconds>` | Smallest gap between two warp-key presses, 0.5 to 10 s in 0.5 s steps (default 3) |
 | Settings | `mult <1-3>` | Vincent multiplier |
 | | `name <username>` | Your name, to recognise your dye |
 | | `cooldown <seconds>` | Assumed Trevor cooldown (his own message overrides it) |

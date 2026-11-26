@@ -19,8 +19,24 @@ public enum AcceptMode {
         this.word = word;
     }
 
-    public AcceptMode next() { return values()[(ordinal() + 1) % values().length]; }
-    public AcceptMode previous() { return values()[(ordinal() + values().length - 1) % values().length]; }
+    public AcceptMode next() { return next(true); }
+    public AcceptMode previous() { return previous(true); }
+
+    /** Next mode, skipping Automatic when the variant does not allow it (Trevor+ Lite). */
+    public AcceptMode next(boolean allowAuto) { return step(1, allowAuto); }
+    public AcceptMode previous(boolean allowAuto) { return step(-1, allowAuto); }
+
+    private AcceptMode step(int d, boolean allowAuto) {
+        int n = values().length;
+        AcceptMode m = this;
+        do {
+            m = values()[((m.ordinal() + d) % n + n) % n];
+        } while (m == AUTO && !allowAuto);
+        return m;
+    }
+
+    /** This mode, or Manual if it is Automatic and that is not allowed (a setting carried over from Trevor+). */
+    public AcceptMode allowing(boolean allowAuto) { return this == AUTO && !allowAuto ? MANUAL : this; }
 
     /** Accepts the enum name or the short word; null if neither. */
     public static AcceptMode parse(String s) {

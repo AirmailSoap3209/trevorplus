@@ -103,16 +103,23 @@ final class TrevorUiScreen extends Screen {
         movables.add(centred("Accept button",
                 (g, f) -> TrevorplusClient.drawAcceptButton(g, f, 0.6),
                 TrevorplusClient::acceptBox,
-                (cx, top) -> { s.acceptX = cx; s.acceptY = top; }, () -> s.accept() == AcceptMode.CLICK));
+                (cx, top) -> { s.acceptX = cx; s.acceptY = top; }, () -> TrevorplusClient.acceptMode() == AcceptMode.CLICK));
     }
 
     private void buildCategories(Settings s) {
         List<Row> general = new ArrayList<>();
         general.add(new Row(Kind.CHOICE, "Accept quests", "Warp key / chat: press the warp key or click [YES] in chat. "
-                + "Click to accept: a button appears when Trevor offers a quest, one left click takes it. Automatic: sent for you.",
-                () -> s.accept().label, () -> s.accept() == AcceptMode.AUTO ? HudLines.WARN : HudLines.VALUE,
-                () -> { s.acceptMode = s.accept().next().name(); save(); },
-                () -> { s.acceptMode = s.accept().previous().name(); save(); }, 0, () -> true));
+                + "Click to accept: a button appears when Trevor offers a quest, one left click takes it."
+                + (BuildFlags.AUTOMATION ? " Automatic: sent for you." : ""),
+                () -> TrevorplusClient.acceptMode().label,
+                () -> TrevorplusClient.acceptMode() == AcceptMode.AUTO ? HudLines.WARN : HudLines.VALUE,
+                () -> { s.acceptMode = TrevorplusClient.acceptMode().next(BuildFlags.AUTOMATION).name(); save(); },
+                () -> { s.acceptMode = TrevorplusClient.acceptMode().previous(BuildFlags.AUTOMATION).name(); save(); }, 0, () -> true));
+        general.add(choice("Warp key delay", "Smallest gap between two presses of the warp key, so a double press never "
+                + "sends two commands. Click adds 0.5 s, right click subtracts (0.5 s to 10 s).",
+                () -> TrevorplusClient.fmtDelay(s.navMinIntervalMs), () -> HudLines.VALUE,
+                () -> { s.setNavDelayMs(s.navMinIntervalMs + Settings.NAV_DELAY_STEP_MS); save(); },
+                () -> { s.setNavDelayMs(s.navMinIntervalMs - Settings.NAV_DELAY_STEP_MS); save(); }));
         general.add(choice("Vincent multiplier", "Your active Vincent dye multiplier (1x when it is off), used for dye odds.",
                 () -> s.multiplier + "x", () -> HudLines.GOLD,
                 () -> { TrevorplusClient.engine().setMultiplier(s.multiplier % 3 + 1); save(); },
@@ -164,25 +171,24 @@ final class TrevorUiScreen extends Screen {
                 }, () -> TrevorplusClient.gameFov() > 0 ? HudLines.LABEL : HudLines.VALUE,
                 () -> { s.fovDegrees = Math.min(130, s.fovDegrees + 5); save(); },
                 () -> { s.fovDegrees = Math.max(30, s.fovDegrees - 5); save(); });
-        if (BuildFlags.ESP) {
-        finder.add(toggle("Mob highlight", "Boxes the quest mob on screen once it is loaded and shows a direction line at the top.",
+        finder.add(toggle("Mob highlight", BuildFlags.ESP
+                        ? "Boxes the quest mob on screen once it is loaded and shows a direction line at the top."
+                        : "Boxes the quest mob while it is on your screen and in direct sight; nothing is shown through walls.",
                 () -> s.highlightEnabled, v -> s.highlightEnabled = v));
-        finder.add(choice("Behind walls", "How the mob box, glow outline and Theodolite blocks show when something is in "
+        if (BuildFlags.ESP) finder.add(choice("Behind walls", "How the mob box, glow outline and Theodolite blocks show when something is in "
                 + "the way: always, faded, or only while in sight. The direction line always shows.",
                 () -> s.esp().label, () -> s.esp() == EspMode.ALWAYS ? HudLines.WARN : HudLines.GOOD,
                 () -> { s.espMode = s.esp().next().name(); save(); },
                 () -> { s.espMode = s.esp().previous().name(); save(); }));
-        finder.add(fov.under(() -> s.highlightEnabled));
+        finder.add(fov.under(() -> s.highlightEnabled || s.ringsEnabled));
         finder.add(header("Shuriken reminder"));
-        }
         finder.add(toggle("Shuriken reminder", "Reminds you to apply a Shuriken when the quest mob is near and its name "
                 + "tag shows none. Choose the rarities below.", () -> s.shurikenReminder, v -> s.shurikenReminder = v));
         for (Rarity r : Rarity.values()) {
             finder.add(toggle(r.label(), "Remind for " + r.label() + " mobs.",
                     () -> s.shurikenFor(r), v -> s.setShurikenFor(r, v)).under(() -> s.shurikenReminder));
         }
-        if (BuildFlags.ESP) categories.add(new Category("Mob finder", "Finding the quest mob, and the Shuriken reminder.", finder));
-        else categories.add(new Category("Shuriken", "Reminds you to apply a Shuriken to the quest mob.", finder));
+        categories.add(new Category("Mob finder", "Finding the quest mob, and the Shuriken reminder.", finder));
 
         List<Row> theo = new ArrayList<>();
         theo.add(toggle("Highlight blocks", "Highlights the blocks at the height your Theodolite hints point to. "
@@ -193,7 +199,6 @@ final class TrevorUiScreen extends Screen {
                 () -> s.blocksRingFilter, v -> s.blocksRingFilter = v).under(() -> s.blocksEnabled));
         theo.add(toggle("Dotted rings", "Draws the hint rings as dotted lines on screen and marks where they cross.",
                 () -> s.ringsEnabled, v -> s.ringsEnabled = v));
-        if (!BuildFlags.ESP) theo.add(fov);
         categories.add(new Category("Theodolite", "Help with Trevor's distance and angle hints.", theo));
 
         List<Row> alerts = new ArrayList<>();
