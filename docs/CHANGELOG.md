@@ -128,3 +128,14 @@ top-face painting that cost most of the FPS.
 - While hidden, the warp key and auto-accept are disabled too. The menu key and `/tp` still open the menu.
 - Individual toggles for the chat messages the mod prints: mob found, quest accepted, warp info, dye recorded.
 - Settings menu is paged when it does not fit the screen.
+
+## 2.3.0 – First public release
+
+- First-launch welcome screen: detects your username, sets the Vincent multiplier, sounds and auto-accept, shows the
+  warp key, and links to the HUD editor and full settings. Shown once (not for existing installs); reopen with
+  `/trevorplus welcome` or the new "Welcome screen" row in the menu.
+- `/trevorplus debug ...` is only registered in debug mode (`"debugMode": true` in settings.json, or a dev environment),
+  and is hidden from `/trevorplus help` otherwise. Routine engine log lines are logged at debug level unless debug mode is on.
+- Removed the template example mixins. Release jars are named `trevorplus-<version>+<mc>.jar`.
+- Modrinth and CurseForge publishing via `./gradlew publishMods` and a release workflow (docs/PUBLISHING.md).
+- `tools/run-tests.sh` works on Windows (Git Bash) too, and CI runs it.

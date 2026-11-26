@@ -73,6 +73,9 @@ public class TrevorplusClient implements ClientModInitializer {
     private static KeyMapping navKey;
     private static KeyMapping uiKey;
     private static boolean openUi;
+    private static boolean openWelcome;
+    private static int worldTicks;
+    private static final int WELCOME_DELAY_TICKS = 40;
     private static Object lastLevel;
     private static final com.trevorplus.quests.Presence presence = new com.trevorplus.quests.Presence();
     private static volatile boolean overlaysOn = true;
@@ -92,10 +95,10 @@ public class TrevorplusClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         dir = FabricLoader.getInstance().getConfigDir().resolve("trevorplus");
-        store = new HistoryStore(dir, msg -> Trevorplus.LOGGER.info("[store] {}", msg));
+        store = new HistoryStore(dir, msg -> Trevorplus.LOGGER.warn("[store] {}", msg));   // only problems are reported
         settings = Settings.fromMap(store.readJson("settings.json"));
         engine = new TrapperEngine(Clock.SYSTEM, settings, store, TrevorplusClient::playerPos,
-                new Listener(), msg -> Trevorplus.LOGGER.info("[engine] {}", msg));
+                new Listener(), msg -> verbose("[engine] {}", msg));
 
         navKey = Keybinds.registerNavKey();
         uiKey = Keybinds.registerUiKey();
@@ -108,7 +111,7 @@ public class TrevorplusClient implements ClientModInitializer {
                     if (yes != null) {
                         String bare = yes.startsWith("/") ? yes.substring(1) : yes;
                         if (bare.startsWith("chatprompt ")) engine.onQuestPrompt(yes);
-                        else Trevorplus.LOGGER.info("[engine] [YES] button ignored, unexpected command: {}", yes);
+                        else verbose("[engine] [YES] button ignored, unexpected command: {}", yes);
                     }
                 } catch (RuntimeException e) {
                     Trevorplus.LOGGER.error("message handling failed", e);
@@ -155,6 +158,12 @@ public class TrevorplusClient implements ClientModInitializer {
         if (openUi && mc.gui.screen() == null && mc.player != null) {
             openUi = false;
             mc.gui.setScreen(new TrevorUiScreen());
+        }
+        // first launch: greet once, a couple of seconds after the first world has loaded
+        worldTicks = mc.player == null ? 0 : worldTicks + 1;
+        if ((openWelcome || !settings.welcomeShown) && worldTicks >= WELCOME_DELAY_TICKS && mc.gui.screen() == null) {
+            openWelcome = false;
+            mc.gui.setScreen(new WelcomeScreen());
         }
         // Hypixel server hops arrive as a new world on the same connection: treat that like leaving
         if (mc.level != lastLevel) {
@@ -555,6 +564,22 @@ public class TrevorplusClient implements ClientModInitializer {
         store.writeAtomic("settings.json", settings.toMap());
     }
 
+    /** Debug commands and verbose logs: in a dev environment, or with "debugMode": true in settings.json. */
+    static boolean debugEnabled() {
+        return settings.debugMode || FabricLoader.getInstance().isDevelopmentEnvironment();
+    }
+
+    /** Routine engine chatter: visible in the log only in debug mode, so normal play keeps latest.log clean. */
+    private static void verbose(String format, Object arg) {
+        if (debugEnabled()) Trevorplus.LOGGER.info(format, arg);
+        else Trevorplus.LOGGER.debug(format, arg);
+    }
+
+    /** Current binding of the smart warp key, for the welcome screen. */
+    static String navKeyName() {
+        return navKey.getTranslatedKeyMessage().getString();
+    }
+
     private static final class Listener implements EngineListener {
         @Override
         public void onDye(DyeLuck.DyeDrop drop) {
@@ -869,7 +894,12 @@ public class TrevorplusClient implements ClientModInitializer {
                         "command", StringArgumentType.greedyString())
                         .executes(c -> setWarp(c.getSource(),
                                 StringArgumentType.getString(c, "area"), StringArgumentType.getString(c, "command"))))));
-        root.then(debug);
+        root.then(lit("welcome").executes(c -> {
+            openWelcome = true;     // opens as soon as the chat window has closed
+            return 1;
+        }));
+        // diagnostics stay out of release builds' command tree unless debug mode is switched on
+        if (debugEnabled()) root.then(debug);
         root.then(data);
         return root;
     }
@@ -902,6 +932,7 @@ public class TrevorplusClient implements ClientModInitializer {
         src.sendFeedback(Component.literal("\u00a7b\u00a7lTrevor+ \u00a77commands   \u00a78(\u00a7f/tp\u00a78 or \u00a7f/trevorplus\u00a78 opens the menu)"));
         section(src, "Everyday");
         h(src, "ui", "open the settings menu and HUD editor");
+        h(src, "welcome", "show the first-launch screen again");
         h(src, "status", "print your stats in chat");
         h(src, "nav", "the smart warp key, without the keybind");
         h(src, "pause | resume | reset", "control the session clock / start a fresh session");
@@ -928,9 +959,11 @@ public class TrevorplusClient implements ClientModInitializer {
         h(src, "data quests <n>", "set quests since your last dye");
         h(src, "data counts <t> <u> <d> <e> <el>", "set the creature totals");
         h(src, "data elusivegap <n>", "set creatures since the last Elusive");
-        section(src, "Debug");
-        h(src, "debug nametag | sidebar", "write nametags / print the sidebar, to send me");
-        h(src, "debug sim <chat line>", "feed a chat line through the parser");
+        if (debugEnabled()) {
+            section(src, "Debug");
+            h(src, "debug nametag | sidebar", "write nametags / print the sidebar, for bug reports");
+            h(src, "debug sim <chat line>", "feed a chat line through the parser");
+        }
         StringBuilder areas = new StringBuilder("\u00a77Areas: \u00a7f");
         for (Area a : Area.values()) areas.append(a.name()).append(' ');
         src.sendFeedback(Component.literal(areas.toString().trim()));
@@ -974,7 +1007,7 @@ public class TrevorplusClient implements ClientModInitializer {
         if (symbol == null) {
             say(src, "No blue symbol found on that name tag. Its pieces (text / colour):");
             for (var s : segs) say(src, "  '" + s.text() + "'  " + (s.rgb() < 0 ? "no colour" : String.format("#%06X", s.rgb())));
-            return say(src, "Send me this list and I will adjust the detection.");
+            return say(src, "Include this list in a bug report so the detection can be adjusted.");
         }
         settings.shurikenMarker = symbol;
         saveSettings();

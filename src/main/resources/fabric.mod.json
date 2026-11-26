@@ -7,7 +7,11 @@
 	"authors": [
 		"AirmailSoap3209"
 	],
-	"contact": {},
+	"contact": {
+		"homepage": "https://github.com/AirmailSoap3209/trevorplus",
+		"sources": "https://github.com/AirmailSoap3209/trevorplus",
+		"issues": "https://github.com/AirmailSoap3209/trevorplus/issues"
+	},
 	"license": "CC0-1.0",
 	"icon": "assets/trevorplus/icon.png",
 	"environment": "client",
@@ -19,13 +23,6 @@
 			"com.trevorplus.client.TrevorplusClient"
 		]
 	},
-	"mixins": [
-		"trevorplus.mixins.json",
-		{
-			"config": "trevorplus.client.mixins.json",
-			"environment": "client"
-		}
-	],
 	"depends": {
 		"fabricloader": ">=0.20.1",
 		"minecraft": "~26.2",

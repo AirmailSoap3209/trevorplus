@@ -1009,6 +1009,20 @@ check("server hop saves nothing", r6.finished.isEmpty());
         check("rings off by default, blocks on", !new Settings().ringsEnabled && new Settings().blocksEnabled && !new Settings().blocksRingFilter);
         check("block settings roundtrip", rs2.ringsEnabled && !rs2.blocksEnabled && rs2.blocksRingFilter);
 
+        // first launch and debug mode
+        check("fresh install shows the welcome", !Settings.fromMap(new java.util.LinkedHashMap<>()).welcomeShown);
+        java.util.Map<String, Object> upgrading = new java.util.LinkedHashMap<>();
+        upgrading.put("hudX", 40L);
+        check("existing settings without the key skip the welcome", Settings.fromMap(upgrading).welcomeShown);
+        Settings ws = new Settings();
+        Settings ws2 = Settings.fromMap(FlatJson.decode(FlatJson.encode(ws.toMap())));
+        check("welcome not seen survives a save", !ws2.welcomeShown);
+        ws.welcomeShown = true;
+        check("welcome seen survives a save", Settings.fromMap(FlatJson.decode(FlatJson.encode(ws.toMap()))).welcomeShown);
+        check("debug mode off by default and not written", !new Settings().debugMode && !new Settings().toMap().containsKey("debugMode"));
+        Settings dbg = new Settings(); dbg.debugMode = true;
+        check("debug mode roundtrip", Settings.fromMap(FlatJson.decode(FlatJson.encode(dbg.toMap()))).debugMode);
+
         // the real tag from the log: pieces split, aqua icon (custom font, prints blank) after the heart
         var real = java.util.List.of(
                 new com.trevorplus.entities.ShurikenDetector.Segment("[", 0x555555),

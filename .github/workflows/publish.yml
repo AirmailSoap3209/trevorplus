@@ -1,0 +1,39 @@
+# Uploads the jar to Modrinth and CurseForge when a GitHub release is published.
+# Needs the repository secrets MODRINTH_TOKEN and CURSEFORGE_TOKEN, and the project IDs
+# in gradle.properties (modrinth_id, curseforge_id). See docs/PUBLISHING.md.
+
+name: publish
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+      - name: setup jdk
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+      - name: logic tests
+        run: sh tools/run-tests.sh
+      - name: build and publish
+        run: ./gradlew build publishMods
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+      - name: attach jars to the GitHub release
+        if: github.event_name == 'release'
+        run: gh release upload "${{ github.event.release.tag_name }}" build/libs/*.jar --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+    permissions:
+      contents: write

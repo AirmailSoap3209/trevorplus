@@ -30,17 +30,16 @@ Timer, finder, Theodolite aid, alerts and a HUD you can move anywhere.
 
 ## Install
 
-1. Install Fabric Loader (0.20.1 or newer) and Fabric API for Minecraft 26.2.
-2. Put the Trevor+ jar in your `mods` folder.
+1. Install Fabric Loader (0.20.1 or newer) and [Fabric API](https://modrinth.com/mod/fabric-api) for Minecraft 26.2.
+2. Download Trevor+ from Modrinth, CurseForge or the GitHub releases, and put the jar in your `mods` folder.
 3. Launch the game. Everything is saved in `config/trevorplus/`.
 
 ## First five minutes
 
-1. Press `/tp` (or `/trevorplus ui`) to open the menu. Hover any row to see what it does.
-2. Run `/trevorplus name <your username>` so your own Pelt Dye is recognised.
-3. Set your Vincent multiplier in the menu, or with `/trevorplus mult 2`.
-4. Press **Move HUDs** in the menu and drag the panels, the direction line and the alert banner where you like them.
-5. Take a quest from Trevor. The HUD starts on its own.
+1. Join a world or server. The **welcome screen** opens once: it fills in your username (so your own Pelt Dye is recognised) and lets you set your Vincent multiplier, sounds and auto-accept.
+2. Press **Arrange HUDs** there (or **Move HUDs** in the menu) and drag the panels, the direction line and the alert banner where you like them.
+3. Take a quest from Trevor. The HUD starts on its own.
+4. Any time later: `/tp` (or `/trevorplus ui`) opens the full menu, `/trevorplus welcome` shows the welcome screen again.
 
 ## Controls
 
@@ -57,6 +56,7 @@ Timer, finder, Theodolite aid, alerts and a HUD you can move anywhere.
 | Group | Command | What it does |
 |---|---|---|
 | Everyday | `ui` | Settings menu and HUD editor |
+| | `welcome` | Show the first-launch screen again |
 | | `status` | Print your stats in chat |
 | | `nav` | The warp key without the keybind |
 | | `pause`, `resume`, `reset` | Session clock control, or start a fresh session |
@@ -78,8 +78,6 @@ Timer, finder, Theodolite aid, alerts and a HUD you can move anywhere.
 | | `data quests <n>` | Set quests since your last dye |
 | | `data counts <t> <u> <d> <e> <el>` | Set your creature totals |
 | | `data elusivegap <n>` | Set creatures since the last Elusive |
-| Debug | `debug nametag`, `debug sidebar` | Write nametags / print the sidebar, for bug reports |
-| | `debug sim <chat line>` | Feed a chat line through the parser |
 
 > `/tp` is also the vanilla teleport command. Trevor+ only claims the bare `/tp`; if you ever need the vanilla one, use `/minecraft:tp`.
 
@@ -98,24 +96,28 @@ Everything lives in `config/trevorplus/`: `settings.json`, `state.json`, `quests
 
 ## Troubleshooting
 
+Report bugs on the [issue tracker](https://github.com/AirmailSoap3209/trevorplus/issues).
+
 | Symptom | Try |
 |---|---|
-| Zone shows "unknown" | `/trevorplus debug sidebar` and send me the output. |
-| A mob is not detected | Stand near it and run `/trevorplus debug nametag`. |
+| Zone shows "unknown" | Turn on debug mode (below), run `/trevorplus debug sidebar` and paste the output into an issue. |
+| A mob is not detected | Turn on debug mode, stand near it and run `/trevorplus debug nametag`, then attach `config/trevorplus/nametag-dump.txt`. |
 | The Shuriken icon is not recognised | Look at a mob that has one and run `/trevorplus shuriken learn`. |
 | No sounds | Check `/trevorplus sound test`, then look for `[sound]` in `logs/latest.log`. |
 | Blocks only show as flat tops | Look for `[xray]` in `logs/latest.log`: the 3D renderer fell back to the cheap overlay. |
 
+**Debug mode.** Diagnostic commands are hidden by default. To turn them on, close the game, add `"debugMode": true` to `config/trevorplus/settings.json`, and start it again. This adds `/trevorplus debug nametag | sidebar | sim <chat line>` and writes every quest event to `logs/latest.log`. Remove the line again when you are done.
+
 ## Building
 
 ```
-./gradlew build          # in your project root, needs Java 25
+./gradlew build          # in your project root, needs Java 25; jar lands in build/libs/
 sh tools/run-tests.sh    # the pure logic tests, no Minecraft needed
 python3 tools/make_icon.py
 ```
 
 The code is split in two: `src/main` is the tested logic (no Minecraft classes), `src/client` is the thin Minecraft layer.
-See [docs/CHANGELOG.md](docs/CHANGELOG.md) for what changed in each milestone.
+See [docs/CHANGELOG.md](docs/CHANGELOG.md) for what changed in each milestone, and [docs/PUBLISHING.md](docs/PUBLISHING.md) for how releases go out to Modrinth and CurseForge.
 
 ## Credits
 

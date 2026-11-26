@@ -75,6 +75,13 @@ public final class Settings {
     public boolean shurikenReminder = true;
     /** The icon text learned with /trevorplus shuriken learn; empty = detect any blue symbol. */
     public String shurikenMarker = "";
+    /** True once the first-launch welcome screen has been shown (or skipped). */
+    public boolean welcomeShown = false;
+    /**
+     * Not in the menu: enables the /trevorplus debug commands and verbose engine logging. Set
+     * "debugMode": true in settings.json by hand when collecting data for a bug report.
+     */
+    public boolean debugMode = false;
     /** Area enum name -> custom command, e.g. OASIS -> "/warp desert". */
     public final Map<String, String> warpOverrides = new HashMap<>();
 
@@ -136,6 +143,8 @@ public final class Settings {
         m.put("alertMin", alertMin);
         m.put("shurikenReminder", shurikenReminder);
         m.put("shurikenMarker", shurikenMarker);
+        m.put("welcomeShown", welcomeShown);
+        if (debugMode) m.put("debugMode", true);      // stays out of the file unless someone turned it on
         for (Map.Entry<String, String> e : warpOverrides.entrySet()) m.put("warp." + e.getKey(), e.getValue());
         return m;
     }
@@ -185,6 +194,9 @@ public final class Settings {
         s.alertMin = FlatJson.str(m, "alertMin", "ENDANGERED");
         s.shurikenReminder = FlatJson.bool(m, "shurikenReminder", true);
         s.shurikenMarker = FlatJson.str(m, "shurikenMarker", "");
+        // an existing settings file without the key belongs to someone upgrading: do not greet them as new
+        s.welcomeShown = FlatJson.bool(m, "welcomeShown", !m.isEmpty());
+        s.debugMode = FlatJson.bool(m, "debugMode", false);
         for (Map.Entry<String, Object> e : m.entrySet()) {
             if (e.getKey().startsWith("warp.") && e.getValue() instanceof String v) {
                 s.warpOverrides.put(e.getKey().substring(5), v);

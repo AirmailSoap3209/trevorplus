@@ -5,11 +5,7 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import org.lwjgl.glfw.GLFW;
 
-/**
- * Key registration lives alone in this file on purpose: it is the one part whose 26.2 API names
- * I could not confirm from SkyHanni (it uses its own key system). If the compiler complains
- * here, send me the error; the fix is a one- or two-line change.
- */
+/** Key registration: the smart warp key (G) and the menu key (unbound), under Controls > Trevor+. */
 final class Keybinds {
     private Keybinds() {}
 

@@ -42,8 +42,12 @@ final class TrevorUiScreen extends Screen {
     private double dragOffX, dragOffY;
     private int lastW = 427, lastH = 240;      // refreshed on every draw from the graphics object
 
-    TrevorUiScreen() {
+    TrevorUiScreen() { this(false); }
+
+    /** @param startInEditor open straight into the drag-and-drop HUD editor */
+    TrevorUiScreen(boolean startInEditor) {
         super(Component.literal("Trevor+"));
+        edit = startInEditor;
         Settings s = TrevorplusClient.settings();
 
         movables.add(panel("Quest HUD", TrevorplusClient::mainLines, TrevorplusClient::accent,
@@ -126,6 +130,8 @@ final class TrevorUiScreen extends Screen {
         }));
         rows.add(action("Reset session stats", "click", "Starts a fresh session for the stat panels. Your saved quest history is kept.",
                 () -> TrevorplusClient.engine().resetSession()));
+        rows.add(action("Welcome screen", "open", "Shows the first-launch screen again: quick setup and a short tour.",
+                () -> Minecraft.getInstance().gui.setScreen(new WelcomeScreen())));
     }
 
     // ---- movable builders --------------------------------------------------------------------
