@@ -1,6 +1,6 @@
 # Uploads the jar to Modrinth and CurseForge when a GitHub release is published.
 # Needs the repository secrets MODRINTH_TOKEN and CURSEFORGE_TOKEN, and the project IDs
-# in gradle.properties (modrinth_id, curseforge_id). See docs/PUBLISHING.md.
+# in gradle.properties (curseforge_id, modrinth_lite_id, curseforge_lite_id). See docs/PUBLISHING.md.
 
 name: publish
 on:
@@ -44,7 +44,7 @@ jobs:
         run: |
           prop() { sed -n "s/^$1=//p" gradle.properties | tr -d '[:space:]'; }
           configured=0
-          for site in modrinth curseforge modrinth_lite curseforge_lite; do
+          for site in curseforge modrinth_lite curseforge_lite; do      # the full version is never on Modrinth
             id=$(prop "${site}_id")
             token_var=$(echo "${site%_lite}_TOKEN" | tr '[:lower:]' '[:upper:]')    # lite uses the same token
             token=$(printenv "$token_var" || true)
@@ -59,7 +59,7 @@ jobs:
             fi
           done
           if [ "$configured" -eq 0 ]; then
-            echo "::error::No site is set up to publish to. Fill in modrinth_id and/or curseforge_id in gradle.properties."
+            echo "::error::No site is set up to publish to. Fill in curseforge_id and/or modrinth_lite_id in gradle.properties."
             exit 1
           fi
       - name: logic tests

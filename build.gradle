@@ -106,6 +106,8 @@ def modProps = { boolean lite ->
 			: "Trapper pelt-grinding companion for Hypixel SkyBlock. Quest timer and pelts/hour, mob finder with an on-screen box, Theodolite block highlight, rarity alerts, zone and cooldown tracking, and a movable HUD with a built-in settings menu. Client-side only.",
 		curseforge_id  : lite ? project.curseforge_lite_id : project.curseforge_id,
 		curseforge_slug: lite ? project.curseforge_lite_slug : project.curseforge_slug,
+		// only Lite is on Modrinth (no cheats allowed there); its update check uses Modrinth when this is set
+		modrinth_id    : lite ? project.modrinth_lite_id : "",
 	]
 }
 
@@ -190,15 +192,7 @@ publishMods {
 	def liteFile = liteJar.flatMap { it.archiveFile }
 	def liteName = "Trevor+ Lite ${project.mod_version}"
 
-	if (!project.modrinth_id.isEmpty()) {
-		modrinth {
-			projectId = project.modrinth_id
-			accessToken = modrinthToken
-			minecraftVersions.add(project.minecraft_version)
-			requires("fabric-api")
-			optional("modmenu")
-		}
-	}
+	// Trevor+ (full) is never published to Modrinth: Modrinth does not allow ESP features. Only Lite goes there.
 	if (!project.modrinth_lite_id.isEmpty()) {
 		modrinth("modrinthLite") {
 			projectId = project.modrinth_lite_id

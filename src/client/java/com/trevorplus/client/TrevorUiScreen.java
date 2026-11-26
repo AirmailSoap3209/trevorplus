@@ -135,8 +135,8 @@ final class TrevorUiScreen extends Screen {
                 () -> { s.autoHideSeconds = Math.min(600, s.autoHideSeconds + 10); save(); },
                 () -> { s.autoHideSeconds = Math.max(10, s.autoHideSeconds - 10); save(); }).under(() -> s.autoHide));
         general.add(header("Other"));
-        general.add(toggle("Check for updates", "Looks for a newer Trevor+ on CurseForge when the game starts and tells you "
-                + "in chat. Sends no personal data. Takes effect on the next start.",
+        general.add(toggle("Check for updates", "Looks for a newer " + BuildFlags.NAME + " on " + UpdateCheck.siteName()
+                + " when the game starts and tells you in chat. Sends no personal data. Takes effect on the next start.",
                 () -> s.updateCheck, v -> s.updateCheck = v));
         general.add(action("Welcome screen", "open", "Shows the first-launch screen again: quick setup and a short tour.",
                 () -> Minecraft.getInstance().gui.setScreen(new WelcomeScreen())));

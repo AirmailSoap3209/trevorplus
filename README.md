@@ -47,7 +47,7 @@ In Lite the ESP code is compiled out, not just switched off. Both use the same `
 ## Install
 
 1. Install Fabric Loader (0.20.1 or newer) and [Fabric API](https://modrinth.com/mod/fabric-api) for Minecraft 26.2.
-2. Download Trevor+ from Modrinth, CurseForge or the GitHub releases, and put the jar in your `mods` folder.
+2. Download the jar and put it in your `mods` folder: Trevor+ from CurseForge, Trevor+ Lite from Modrinth, or either from the GitHub releases.
 3. Launch the game. Everything is saved in `config/trevorplus/`.
 
 ## First five minutes
@@ -105,7 +105,7 @@ In Lite the ESP code is compiled out, not just switched off. Both use the same `
 - **Reads, never snoops.** It only looks at chat, the sidebar, and entities and blocks your client already has loaded.
 - **Sends almost nothing.** One command per press of the warp key. The only other thing it can send is Trevor's own `[YES]` command: when you accept with the key or the on-screen button, or by itself if you choose *Automatic*.
 - **Click to accept.** For players who would rather not automate anything: when Trevor offers a quest, a button appears for 5 seconds and one left click (or a click on it with chat open) takes the quest.
-- **One update check.** At start-up it asks CurseForge for Trevor+'s public file list (no account or player data is sent) and tells you once in chat if a newer version is out. Turn it off with "Check for updates" in the menu.
+- **One update check.** At start-up it asks CurseForge (Trevor+) or Modrinth (Trevor+ Lite) for the public version list (no account or player data is sent) and tells you once in chat if a newer version is out. Turn it off with "Check for updates" in the menu.
 - **Stays out of the way.** After you have been outside the Farming Islands for a set time (default 1 minute, change it in the menu or with `/trevorplus autohide <seconds>`), every panel, banner, highlight and sound switches off, and the warp key and auto-accept stop doing anything. It all comes back when you return or start a quest. The settings menu and `/tp` still work anywhere.
 - **Your chat, your call.** Each chat line Trevor+ prints (mob found, quest accepted, warp info, dye recorded) has its own toggle in the menu.
 - **Server hops reset the quest.** Leaving or hopping servers drops the active quest without saving it, so your stats and history are not polluted. Past quests, totals and dye odds are untouched.

@@ -24,9 +24,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 
 /**
- * Looks for a newer Trevor+ release on CurseForge, once per game start, in the background.
- * One anonymous GET of the project's public file list (the same one the CurseForge website loads);
- * nothing about the player is sent. Only approved release files for this Minecraft version count.
+ * Looks for a newer release once per game start, in the background: on Modrinth when the build has a
+ * Modrinth project (Trevor+ Lite), otherwise on CurseForge. One anonymous GET of the project's public
+ * version list (Modrinth's public API, or the list the CurseForge website loads); nothing about the
+ * player is sent. Only listed / approved release versions for this Minecraft version count.
  * Any failure (offline, blocked, format change) is silent. The result is announced once in chat
  * after joining a world, and is also what Mod Menu's update badge shows.
  */
@@ -38,12 +39,20 @@ final class UpdateCheck {
     private static volatile CompletableFuture<Result> pending;
     private static boolean announced;
 
-    private static String projectId() { return customString("curseforgeId"); }
+    private static boolean onModrinth() { return !blank(customString("modrinthId")); }
 
-    /** The project page, by slug when it is known, otherwise by numeric id (CurseForge redirects it). */
+    /** "${x}" left over means the build had no value for it. */
+    private static boolean blank(String s) { return s.isBlank() || s.contains("$"); }
+
+    private static String projectId() { return onModrinth() ? customString("modrinthId") : customString("curseforgeId"); }
+
+    static String siteName() { return onModrinth() ? "Modrinth" : "CurseForge"; }
+
+    /** The project page: Modrinth by id; CurseForge by slug when it is known, otherwise by numeric id. */
     static String pageUrl() {
+        if (onModrinth()) return "https://modrinth.com/mod/" + projectId();
         String slug = customString("curseforgeSlug");
-        return slug.isBlank() ? "https://www.curseforge.com/projects/" + projectId()
+        return blank(slug) ? "https://www.curseforge.com/projects/" + projectId()
                 : "https://www.curseforge.com/minecraft/mc-mods/" + slug;
     }
 
@@ -67,10 +76,14 @@ final class UpdateCheck {
     static synchronized CompletableFuture<Result> start() {
         if (pending != null) return pending;
         String id = projectId();
-        if (!TrevorplusClient.settings().updateCheck || id.isBlank() || id.contains("$")) return null;
+        if (!TrevorplusClient.settings().updateCheck || blank(id)) return null;
         String running = version(BuildFlags.MOD_ID), mc = version("minecraft");
-        HttpRequest request = HttpRequest.newBuilder(URI.create("https://www.curseforge.com/api/v1/mods/" + id
-                        + "/files?pageIndex=0&pageSize=25&sort=dateCreated&sortDescending=true"))
+        boolean modrinth = onModrinth();
+        String url = modrinth
+                ? "https://api.modrinth.com/v2/project/" + id + "/version?loaders=%5B%22fabric%22%5D&game_versions=%5B%22"
+                        + mc.replace("\"", "") + "%22%5D"
+                : "https://www.curseforge.com/api/v1/mods/" + id + "/files?pageIndex=0&pageSize=25&sort=dateCreated&sortDescending=true";
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(8))
                 .header("User-Agent", "Trevor+/" + running + " (update check)")
                 .header("Accept", "application/json")
@@ -80,9 +93,9 @@ final class UpdateCheck {
                 .sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenApply(resp -> {
                     if (resp.statusCode() != 200) throw new IllegalStateException("HTTP " + resp.statusCode());
-                    String latest = Versions.newest(parse(resp.body()), mc);
+                    String latest = Versions.newest(modrinth ? parseModrinth(resp.body()) : parse(resp.body()), mc);
                     Result r = new Result(latest, running, Versions.isNewer(latest, running), pageUrl());
-                    Trevorplus.LOGGER.debug("[update] latest on CurseForge: {}, running {}", latest, running);
+                    Trevorplus.LOGGER.debug("[update] latest on {}: {}, running {}", siteName(), latest, running);
                     return r;
                 })
                 .exceptionally(t -> {
@@ -104,6 +117,18 @@ final class UpdateCheck {
             out.add(new Versions.RemoteFile(str(f, "displayName"), str(f, "fileName"),
                     f.has("status") ? f.get("status").getAsInt() : -1,
                     f.has("releaseType") ? f.get("releaseType").getAsInt() : -1, games));
+        }
+        return out;
+    }
+
+    private static List<Versions.RemoteFile> parseModrinth(String body) {
+        List<Versions.RemoteFile> out = new ArrayList<>();
+        for (JsonElement el : JsonParser.parseString(body).getAsJsonArray()) {
+            JsonObject v = el.getAsJsonObject();
+            List<String> games = new ArrayList<>();
+            JsonArray gv = v.has("game_versions") ? v.getAsJsonArray("game_versions") : null;
+            if (gv != null) for (JsonElement g : gv) games.add(g.getAsString());
+            out.add(Versions.modrinth(str(v, "version_number"), str(v, "version_type"), str(v, "status"), games));
         }
         return out;
     }
@@ -135,7 +160,7 @@ final class UpdateCheck {
         if (r == null || !r.newer() || p == null) return;
         Component link = Component.literal("§b§n[Download]").withStyle(style -> style
                 .withClickEvent(new ClickEvent.OpenUrl(URI.create(r.url())))
-                .withHoverEvent(new HoverEvent.ShowText(Component.literal("Open the " + BuildFlags.NAME + " CurseForge page"))));
+                .withHoverEvent(new HoverEvent.ShowText(Component.literal("Open the " + BuildFlags.NAME + " " + siteName() + " page"))));
         p.sendSystemMessage(Component.literal("§b[Trevor+] §fUpdate available: §a" + r.latest()
                 + " §7(you have " + Versions.core(r.running()) + ")  ").append(link));
     }

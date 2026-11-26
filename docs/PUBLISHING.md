@@ -1,52 +1,72 @@
 # Publishing Trevor+
 
-Releases go to Modrinth and CurseForge through the [mod-publish-plugin](https://github.com/modmuss50/mod-publish-plugin)
+Releases go to CurseForge and Modrinth through the [mod-publish-plugin](https://github.com/modmuss50/mod-publish-plugin)
 (`./gradlew publishMods`), run by `.github/workflows/publish.yml` when a GitHub release is published.
+
+## Where each version goes
+
+| | CurseForge | Modrinth |
+|---|---|---|
+| **Trevor+** (full, with ESP) | yes | **never**: Modrinth does not allow cheats. The build has no way to send it there. |
+| **Trevor+ Lite** (no ESP, no automation) | optional, own project | yes, own project |
+
+Both are built and released together with the same version number.
 
 ## One-time setup
 
-### 1. Create the projects
+### 1. CurseForge: Trevor+
 
-| | Modrinth | CurseForge |
-|---|---|---|
-| Name / slug | Trevor+ / `trevorplus` | Trevor+ / `trevorplus` |
-| Summary | A pelt-grinding companion for Hypixel SkyBlock's Trevor the Trapper. | same |
-| Description | paste `docs/DESCRIPTION.md` | WYSIWYG editor: Source code button, paste `docs/curseforge-description.html` |
-| Icon | `src/main/resources/assets/trevorplus/icon.png` (512×512) | same |
-| Categories | Utility, Game Mechanics | Utility & QoL, Map and Information |
-| Environment | Client: required · Server: unsupported | (set per file: client) |
-| License | CC0-1.0 | Public Domain (CC0) |
-| Source / issues | `https://github.com/AirmailSoap3209/trevorplus` (+ `/issues`) | same |
+| Field | Value |
+|---|---|
+| Name | Trevor+ |
+| Summary | A pelt-grinding companion for Hypixel SkyBlock's Trevor the Trapper. |
+| Description | WYSIWYG editor: Source code button, paste `docs/curseforge-description.html` |
+| Icon | `src/main/resources/assets/trevorplus/icon.png` (512×512) |
+| Categories | Utility & QoL, Map and Information |
+| License | Public Domain (CC0) |
+| Source / issues | `https://github.com/AirmailSoap3209/trevorplus` (+ `/issues`) |
 
-Add a few gallery screenshots: the quest HUD during a quest, the mob box, the Theodolite block highlight, the welcome screen
-and the settings menu. Both sites review new projects by hand, and screenshots make the review faster.
+Then set `curseforge_id` and `curseforge_slug` in `gradle.properties`.
 
-### 1b. Trevor+ Lite
+### 2. Modrinth: Trevor+ Lite
 
-Lite is a separate project on each site (it is a separate mod: id `trevorplus-lite`). Create it the same way, with
-`docs/DESCRIPTION-LITE.md` (Modrinth) or `docs/curseforge-description-lite.html` (CurseForge) as the description, and
-link the two projects to each other in their descriptions or "relations". Then fill in `modrinth_lite_id`,
-`curseforge_lite_id` and `curseforge_lite_slug`. The same tokens are used for both; a lite ID left empty is skipped.
+Create a project at modrinth.com (**Create a project**); it starts as a draft.
 
-### 2. Fill in the project IDs
+| Field | Value |
+|---|---|
+| Name | Trevor+ Lite |
+| URL / slug | `trevorplus-lite` |
+| Summary | A fair-play companion for Hypixel SkyBlock's Trevor the Trapper: quest stats, Theodolite aid and alerts, no ESP or automation. |
+| Description | paste `docs/modrinth-description-lite.md` (it does not mention the full version, on purpose) |
+| Icon | `src/main/resources/assets/trevorplus/icon.png` |
+| Categories | Utility (primary), Game Mechanics |
+| Environment | Client: **required** · Server: **unsupported** |
+| License | CC0-1.0 |
+| Source / issues | `https://github.com/AirmailSoap3209/trevorplus` and `/issues` |
+| Gallery | the quest HUD, the Theodolite blocks, the settings menu, the welcome screen, the accept button |
 
-In `gradle.properties`:
+Copy the project ID (the **⋯** menu > **Copy ID**, 8 characters) into `modrinth_lite_id` in `gradle.properties`.
+The Lite update check uses it too, so it must be set before the release is built.
 
-```
-modrinth_id=<Modrinth project ID, the 8-character one under the project's "..." menu>
-curseforge_id=<CurseForge numeric project ID, from the "About Project" box>
-```
+### 3. CurseForge: Trevor+ Lite (optional)
 
-A platform whose ID is left empty is skipped.
+Same as step 1 with `docs/curseforge-description-lite.html`, then set `curseforge_lite_id` and `curseforge_lite_slug`.
+Leave them empty to publish Lite on Modrinth only.
 
-### 3. Add the API tokens as GitHub secrets
+### 4. API tokens as GitHub secrets
 
 Repository **Settings > Secrets and variables > Actions**:
 
-- `MODRINTH_TOKEN`: a Modrinth personal access token with the *Create versions* scope (modrinth.com/settings/pats).
-- `CURSEFORGE_TOKEN`: a CurseForge API token (curseforge.com/account/api-tokens).
+- `MODRINTH_TOKEN`: a Modrinth personal access token (modrinth.com/settings/pats) with the **Create versions** scope.
+- `CURSEFORGE_TOKEN`: a CurseForge API token (curseforge.com/account/api-tokens). Used for both CurseForge projects.
 
 Never commit these.
+
+### 5. First Modrinth upload and review
+
+Release as usual (below). The workflow uploads the Lite jar to the draft project. Then, on Modrinth, open the project
+and press **Submit for review**: Modrinth only reviews projects that have at least one version. Until it is approved,
+the page is private and Lite's in-game update notice finds nothing (it stays silent).
 
 ## Versioning
 

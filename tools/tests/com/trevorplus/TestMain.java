@@ -1099,6 +1099,15 @@ check("server hop saves nothing", r6.finished.isEmpty());
                 new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.6.0", "x.jar", 4, 2, java.util.List.of("26.2")),       // beta
                 new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.7.0", "x.jar", 4, 1, java.util.List.of("26.3")),       // other MC
                 new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.4.0", "x.jar", 4, 1, java.util.List.of("Fabric", "26.2")));
+        // Modrinth version list (Trevor+ Lite's update check)
+        var mr = java.util.List.of(
+                com.trevorplus.update.Versions.modrinth("2.4.1", "release", "listed", java.util.List.of("26.2")),
+                com.trevorplus.update.Versions.modrinth("2.5.0-beta.1", "beta", "listed", java.util.List.of("26.2")),     // beta: ignored
+                com.trevorplus.update.Versions.modrinth("2.6.0", "release", "archived", java.util.List.of("26.2")),       // not listed: ignored
+                com.trevorplus.update.Versions.modrinth("2.7.0", "release", "listed", java.util.List.of("26.3")));        // other MC: ignored
+        eq("modrinth newest usable", "2.4.1", com.trevorplus.update.Versions.newest(mr, "26.2"));
+        check("modrinth update over 2.4.0 only", com.trevorplus.update.Versions.isNewer(com.trevorplus.update.Versions.newest(mr, "26.2"), "2.4.0") && !com.trevorplus.update.Versions.isNewer(com.trevorplus.update.Versions.newest(mr, "26.2"), "2.4.1"));
+
         // semantic-versioning precedence, the semver.org example chain
         String[] chain = {"1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2",
                 "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "1.0.1", "1.1.0", "2.0.0"};

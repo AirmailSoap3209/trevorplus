@@ -179,3 +179,12 @@ top-face painting that cost most of the FPS.
   pre-release-looking `-26.2` file name). The build and the release workflow reject a non-semver `mod_version` and a
   release tag other than `v<mod_version>`; a `-prerelease` version is published as a beta. The update check compares
   with semver precedence (pre-releases below their release).
+
+## 2.4.1 – Trevor+ Lite on Modrinth
+
+- Lite's update check uses Modrinth's public API (`/v2/project/<id>/version`, filtered to Fabric and the running
+  Minecraft version; only listed release versions count) when `modrinth_lite_id` is set; full keeps CurseForge.
+  `modrinthId` is a new `fabric.mod.json` custom value, empty in the full build.
+- The full version can no longer be published to Modrinth: its Modrinth target and `modrinth_id` are removed, and the
+  release workflow no longer looks for them.
+- New Modrinth page text for Lite (`docs/modrinth-description-lite.md`); publishing checklist reworked per site.

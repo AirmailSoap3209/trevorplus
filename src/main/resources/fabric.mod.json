@@ -41,7 +41,8 @@
 	"custom": {
 		"trevorplus": {
 			"curseforgeId": "${curseforge_id}",
-			"curseforgeSlug": "${curseforge_slug}"
+			"curseforgeSlug": "${curseforge_slug}",
+			"modrinthId": "${modrinth_id}"
 		},
 		"modmenu": {
 			"badges": [

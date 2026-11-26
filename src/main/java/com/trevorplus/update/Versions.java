@@ -16,6 +16,13 @@ public final class Versions {
     /** One entry of the file list, reduced to what matters here. */
     public record RemoteFile(String displayName, String fileName, int status, int releaseType, List<String> gameVersions) {}
 
+    /** A Modrinth version entry: only listed release versions count, like approved CurseForge releases. */
+    public static RemoteFile modrinth(String versionNumber, String versionType, String status, List<String> gameVersions) {
+        return new RemoteFile(versionNumber, null,
+                status == null || "listed".equals(status) ? STATUS_APPROVED : -1,
+                "release".equals(versionType) ? RELEASE_TYPE_RELEASE : RELEASE_TYPE_RELEASE + 1, gameVersions);
+    }
+
     private static final Pattern VERSION = Pattern.compile("(\\d+)\\.(\\d+)(?:\\.(\\d+))?");
 
     /** "Trevor+ 2.4.0" or "trevorplus-2.4.0-26.2.jar" -> "2.4.0"; null if there is none. */
