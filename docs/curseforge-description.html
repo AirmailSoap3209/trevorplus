@@ -1,0 +1,66 @@
+<h1 style="text-align: center;">Trevor+</h1>
+<p style="text-align: center;"><strong>A pelt-grinding companion for Hypixel SkyBlock's Trevor the Trapper.</strong></p>
+<p style="text-align: center;">Minecraft 26.2 &middot; Fabric &middot; requires Fabric API &middot; client-side only</p>
+<hr />
+<p>Trevor+ takes the busywork out of Trevor the Trapper. It times your quests, finds the mob, points you at the right blocks with the Theodolite, tells you when something rare shows up, and keeps the numbers that matter (<strong>pelts per hour</strong> above all) on a HUD you can put wherever you like.</p>
+
+<h2>Features</h2>
+
+<h3>📊 Tracking</h3>
+<ul>
+<li><strong>Quest timer</strong> with average, best and worst kill time, quests per hour and <strong>pelts per hour</strong>, plus a session clock that ignores long idle gaps.</li>
+<li><strong>Dye odds</strong> with your Vincent multiplier, quests since your last dye, and your luck over time.</li>
+<li><strong>Creature HUD:</strong> how many of each rarity you have gotten (session and total), creatures since the last Elusive, and the expected gap.</li>
+<li><strong>Cooldown timer:</strong> "Next quest in 0:23", then "Trevor ready".</li>
+<li>Quests are saved as they finish, so a crash loses nothing. A server hop drops the active quest without saving it, so your stats stay clean.</li>
+</ul>
+
+<h3>🔍 Finding the mob</h3>
+<ul>
+<li>An <strong>on-screen box</strong> around the quest mob (through walls) and a direction line at the top with distance, height hint and Shuriken status. Works for horses, too.</li>
+<li><strong>Zone panel:</strong> the zone Trevor's mob is in, the zone you are in, and a green bar when they match.</li>
+<li><strong>Theodolite aid:</strong> reads Trevor's hints, estimates the Y level and highlights the blocks at that height. Optional dotted hint rings.</li>
+</ul>
+
+<h3>🔔 Alerts</h3>
+<ul>
+<li>Flashing banners for <strong>Endangered</strong> and <strong>Elusive</strong> quests (you choose the minimum rarity), Pelt Dyes, "mob found" and "Trevor ready".</li>
+<li><strong>Shuriken reminder</strong> when the mob is close and its name tag shows none.</li>
+<li>Optional sound cues for each of those.</li>
+</ul>
+
+<h3>⚙️ Controls and comfort</h3>
+<ul>
+<li>A <strong>welcome screen</strong> on first launch that sets up the essentials in a few clicks.</li>
+<li><strong>One smart warp key</strong> (default <strong>G</strong>): accepts Trevor's prompt, otherwise warps to the quest area, otherwise to the Trapper. One command per press.</li>
+<li><strong>Built-in menu</strong> (<code>/tp</code> or <code>/trevorplus</code>) with a description for every setting.</li>
+<li><strong>Every on-screen element is draggable:</strong> both HUDs, the zone panel, the direction line and the alert banner.</li>
+<li>Everything switches off a minute (configurable) after you leave the Farming Islands, and comes back when you return.</li>
+<li>Every chat line the mod prints can be switched off.</li>
+</ul>
+
+<h2>Getting started</h2>
+<ol>
+<li>Install <strong>Fabric Loader</strong> and <a href="https://www.curseforge.com/minecraft/mc-mods/fabric-api" target="_blank" rel="noopener">Fabric API</a> for Minecraft 26.2, then drop Trevor+ into your <code>mods</code> folder.</li>
+<li>Join a world. The welcome screen fills in your username and lets you set your Vincent multiplier.</li>
+<li>Press <strong>Arrange HUDs</strong> to place the panels, then take a quest from Trevor. The HUD starts on its own.</li>
+</ol>
+<p><code>/trevorplus help</code> lists every command. <code>/tp</code> opens the menu; the vanilla teleport is still available as <code>/minecraft:tp</code>.</p>
+
+<h2>Good to know</h2>
+<ul>
+<li><strong>Client-side only.</strong> It reads chat, the sidebar and what your client already has loaded. The only things it ever sends are the warp-key command (one per key press) and, if you turn it on, Trevor's own <code>[YES]</code> command.</li>
+<li><strong>Auto-accept is off by default.</strong> Check the server's rules on automation before you turn it on.</li>
+<li>Your data stays on your computer, in <code>config/trevorplus/</code>.</li>
+<li>Not affiliated with Hypixel or Mojang. Check Hypixel's rules for allowed mods before you use any of it.</li>
+</ul>
+
+<h2>Coming up</h2>
+<ul>
+<li>Per-zone stats: average kill time and rarity counts per zone.</li>
+<li>Coins per hour alongside pelts per hour.</li>
+<li>CSV export of your quest history.</li>
+<li>A warning when a quest runs unusually long.</li>
+</ul>
+<hr />
+<p style="text-align: center;">Found a bug or have an idea? Open an issue on <a href="https://github.com/AirmailSoap3209/trevorplus/issues" target="_blank" rel="noopener">GitHub</a>.</p>

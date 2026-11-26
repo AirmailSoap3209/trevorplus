@@ -11,7 +11,7 @@ Releases go to Modrinth and CurseForge through the [mod-publish-plugin](https://
 |---|---|---|
 | Name / slug | Trevor+ / `trevorplus` | Trevor+ / `trevorplus` |
 | Summary | A pelt-grinding companion for Hypixel SkyBlock's Trevor the Trapper. | same |
-| Description | paste `docs/DESCRIPTION.md` | paste `docs/DESCRIPTION.md` (Markdown editor) |
+| Description | paste `docs/DESCRIPTION.md` | WYSIWYG editor: Source code button, paste `docs/curseforge-description.html` |
 | Icon | `src/main/resources/assets/trevorplus/icon.png` (512×512) | same |
 | Categories | Utility, Game Mechanics | Utility & QoL, Map and Information |
 | Environment | Client: required · Server: unsupported | (set per file: client) |
