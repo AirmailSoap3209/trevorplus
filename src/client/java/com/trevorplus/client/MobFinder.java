@@ -31,6 +31,8 @@ final class MobFinder {
 
     private static Target current;
     private static final Map<Integer, Entity> glowing = new HashMap<>();
+    /** The vanilla outline always shows through walls, so it is only lit while the ESP mode allows it. */
+    private static volatile boolean glowAllowed = true;
 
     private MobFinder() {}
 
@@ -80,8 +82,11 @@ final class MobFinder {
     /** Called every client tick: a server entity-data update can switch the outline off again. */
     static void keepGlow() {
         Target t = current;
-        if (t != null && t.entity() != null && !t.entity().isRemoved()) setGlow(t.entity(), true);
+        if (t != null && t.entity() != null && !t.entity().isRemoved()) setGlow(t.entity(), glowAllowed);
     }
+
+    /** False while the mob is behind a wall in the Dim and Only-when-visible modes. */
+    static void setGlowAllowed(boolean allowed) { glowAllowed = allowed; }
 
     static void clear() {
         current = null;
@@ -116,7 +121,7 @@ final class MobFinder {
         });
         if (target != null && !glowing.containsKey(target.getId())) {
             glowing.put(target.getId(), target);
-            setGlow(target, true);
+            setGlow(target, glowAllowed);
         }
     }
 
@@ -137,17 +142,19 @@ final class MobFinder {
     }
 
     static void setGlow(Entity e, boolean on) {
-        if (!glowTried) {
-            glowTried = true;
-            glowMethod = find(Entity.class, "setGlowingTag", boolean.class);
-            if (glowMethod == null) Trevorplus.LOGGER.warn("[highlight] setGlowingTag not found, outline disabled");
-        }
-        if (glowMethod == null) return;
-        try {
-            glowMethod.invoke(e, on);
-        } catch (ReflectiveOperationException | RuntimeException ex) {
-            Trevorplus.LOGGER.warn("[highlight] could not set glow: {}", ex.toString());
-            glowMethod = null;
+        if (BuildFlags.ESP) {          // compiled out of Trevor+ Lite
+            if (!glowTried) {
+                glowTried = true;
+                glowMethod = find(Entity.class, "setGlowingTag", boolean.class);
+                if (glowMethod == null) Trevorplus.LOGGER.warn("[highlight] setGlowingTag not found, outline disabled");
+            }
+            if (glowMethod == null) return;
+            try {
+                glowMethod.invoke(e, on);
+            } catch (ReflectiveOperationException | RuntimeException ex) {
+                Trevorplus.LOGGER.warn("[highlight] could not set glow: {}", ex.toString());
+                glowMethod = null;
+            }
         }
     }
 

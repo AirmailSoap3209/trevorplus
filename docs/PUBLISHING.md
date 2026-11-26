@@ -21,6 +21,13 @@ Releases go to Modrinth and CurseForge through the [mod-publish-plugin](https://
 Add a few gallery screenshots: the quest HUD during a quest, the mob box, the Theodolite block highlight, the welcome screen
 and the settings menu. Both sites review new projects by hand, and screenshots make the review faster.
 
+### 1b. Trevor+ Lite
+
+Lite is a separate project on each site (it is a separate mod: id `trevorplus-lite`). Create it the same way, with
+`docs/DESCRIPTION-LITE.md` (Modrinth) or `docs/curseforge-description-lite.html` (CurseForge) as the description, and
+link the two projects to each other in their descriptions or "relations". Then fill in `modrinth_lite_id`,
+`curseforge_lite_id` and `curseforge_lite_slug`. The same tokens are used for both; a lite ID left empty is skipped.
+
 ### 2. Fill in the project IDs
 
 In `gradle.properties`:
@@ -53,7 +60,8 @@ Never commit these.
    ./gradlew publishMods        # without tokens set: dry run into build/publishMods
    ```
    Load `build/libs/trevorplus-<version>.jar` in a fresh 26.2 instance: the welcome screen should open once on the
-   first world join, and `/trevorplus help` should list no `debug` section.
+   first world join, and `/trevorplus help` should list no `debug` section. Then do the same with
+   `trevorplus-lite-<version>.jar`: no mob box, glow or direction line, and no "Behind walls" setting.
 4. Commit, push, then create a GitHub release with tag `v<mod_version>`. The publish workflow uploads to both sites and
    attaches the jars to the release.
 

@@ -83,8 +83,8 @@ final class BlockHighlight {
         return true;
     }
 
-    /** Walks the line from the eye to the block top; any solid block on the way hides it. */
-    private static boolean visible(Minecraft mc, double ex, double ey, double ez, double tx, double ty, double tz) {
+    /** Walks the line from the eye to the target; any solid block on the way hides it. Also used for the mob. */
+    static boolean visible(Minecraft mc, double ex, double ey, double ez, double tx, double ty, double tz) {
         double dx = tx - ex, dy = ty - ey, dz = tz - ez;
         double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (dist < 1.5) return true;
@@ -99,25 +99,27 @@ final class BlockHighlight {
     /** Cheap screen-space fallback (top faces only) used only when the 3D renderer is unavailable. */
     static void draw(GuiGraphicsExtractor g, double ex, double ey, double ez, float yaw, float pitch,
                      double fov, double aspect, int W, int H, int color) {
-        int[] b = blocks;
-        budget = 1500;
-        int maxBlocks = 120;
-        double[] xs = new double[4], ys = new double[4];
-        final double lo = 0.08, hi = 0.92;
-        double[][] corner = {{lo, lo}, {hi, lo}, {hi, hi}, {lo, hi}};
-        for (int i = 0; i + 2 < b.length && i < maxBlocks * 3 && budget > 0; i += 3) {
-            boolean ok = true;
-            for (int k = 0; k < 4 && ok; k++) {
-                Projection.Result r = Projection.project(ex, ey, ez, yaw, pitch, fov, aspect,
-                        b[i] + corner[k][0], b[i + 1] + 0.02, b[i + 2] + corner[k][1]);
-                if (!r.inFront() || Math.abs(r.nx()) > 40 || Math.abs(r.ny()) > 40) { ok = false; break; }
-                xs[k] = (r.nx() + 1) / 2 * W;
-                ys[k] = (1 - r.ny()) / 2 * H;
-            }
-            if (!ok) continue;
-            for (int[] span : QuadFill.spans(xs, ys, W, H)) {
-                g.fill(span[1], span[0], span[2], span[0] + 1, color);
-                if (--budget <= 0) break;
+        if (BuildFlags.ESP) {          // compiled out of Trevor+ Lite
+            int[] b = blocks;
+            budget = 1500;
+            int maxBlocks = 120;
+            double[] xs = new double[4], ys = new double[4];
+            final double lo = 0.08, hi = 0.92;
+            double[][] corner = {{lo, lo}, {hi, lo}, {hi, hi}, {lo, hi}};
+            for (int i = 0; i + 2 < b.length && i < maxBlocks * 3 && budget > 0; i += 3) {
+                boolean ok = true;
+                for (int k = 0; k < 4 && ok; k++) {
+                    Projection.Result r = Projection.project(ex, ey, ez, yaw, pitch, fov, aspect,
+                            b[i] + corner[k][0], b[i + 1] + 0.02, b[i + 2] + corner[k][1]);
+                    if (!r.inFront() || Math.abs(r.nx()) > 40 || Math.abs(r.ny()) > 40) { ok = false; break; }
+                    xs[k] = (r.nx() + 1) / 2 * W;
+                    ys[k] = (1 - r.ny()) / 2 * H;
+                }
+                if (!ok) continue;
+                for (int[] span : QuadFill.spans(xs, ys, W, H)) {
+                    g.fill(span[1], span[0], span[2], span[0] + 1, color);
+                    if (--budget <= 0) break;
+                }
             }
         }
     }

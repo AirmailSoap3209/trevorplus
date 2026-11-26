@@ -791,7 +791,7 @@ check("server hop saves nothing", r6.finished.isEmpty());
     static void testPromptAndAutoAccept() {
         String cmd = "/chatprompt abc-123 YES";
         Rig r = new Rig();
-        r.settings.autoAccept = true;
+        r.settings.acceptMode = com.trevorplus.config.AcceptMode.AUTO.name();
         // prompt without Trevor speaking first is ignored
         r.engine.onQuestPrompt(cmd);
         check("prompt needs trevor line", !r.engine.promptFresh());
@@ -807,19 +807,19 @@ check("server hop saves nothing", r6.finished.isEmpty());
         o.say("[NPC] Trevor: Ready?");
         o.engine.onQuestPrompt(cmd);
         o.clock.add(1000);
-        check("off by default", !new Settings().autoAccept && o.engine.autoAcceptCommand() == null);
+        check("off by default", new Settings().accept() == com.trevorplus.config.AcceptMode.MANUAL && o.engine.autoAcceptCommand() == null);
         eq("key accepts prompt", Type.ACCEPT_PROMPT, o.engine.onNavKey().type());
         eq("key hands out command", cmd, o.engine.takePrompt());
         // expiry
         Rig e = new Rig();
-        e.settings.autoAccept = true;
+        e.settings.acceptMode = com.trevorplus.config.AcceptMode.AUTO.name();
         e.say("[NPC] Trevor: Ready?");
         e.engine.onQuestPrompt(cmd);
         e.clock.add(6000);
         check("prompt expires", !e.engine.promptFresh() && e.engine.autoAcceptCommand() == null);
         // not while a quest is active
         Rig q = new Rig();
-        q.settings.autoAccept = true;
+        q.settings.acceptMode = com.trevorplus.config.AcceptMode.AUTO.name();
         q.say(ACCEPT_OASIS);
         q.engine.onQuestPrompt(cmd);
         check("no prompt during quest", !q.engine.promptFresh());
@@ -830,12 +830,12 @@ check("server hop saves nothing", r6.finished.isEmpty());
         s.say(ACCEPT_OASIS);
         check("accept clears prompt", s.engine.takePrompt() == null);
         Settings st = Settings.fromMap(FlatJson.decode(FlatJson.encode(new Settings().toMap())));
-        check("new settings default", !st.autoAccept && st.highlightEnabled && st.hud2Visible && st.hud2Y == 130);
+        check("new settings default", st.accept() == com.trevorplus.config.AcceptMode.MANUAL && st.highlightEnabled && st.hud2Visible && st.hud2Y == 130);
         Settings on = new Settings();
-        on.autoAccept = true;
+        on.acceptMode = com.trevorplus.config.AcceptMode.AUTO.name();
         on.hud2X = 50;
         Settings on2 = Settings.fromMap(FlatJson.decode(FlatJson.encode(on.toMap())));
-        check("new settings roundtrip", on2.autoAccept && on2.hud2X == 50);
+        check("new settings roundtrip", on2.accept() == com.trevorplus.config.AcceptMode.AUTO && on2.hud2X == 50);
     }
 
     static void testBearing() {
@@ -1021,7 +1021,69 @@ check("server hop saves nothing", r6.finished.isEmpty());
         check("welcome seen survives a save", Settings.fromMap(FlatJson.decode(FlatJson.encode(ws.toMap()))).welcomeShown);
         check("debug mode off by default and not written", !new Settings().debugMode && !new Settings().toMap().containsKey("debugMode"));
         Settings dbg = new Settings(); dbg.debugMode = true;
+        // accept mode
+        java.util.Map<String, Object> oldAuto = new java.util.LinkedHashMap<>(); oldAuto.put("autoAccept", true);
+        eq("old autoAccept true becomes Automatic", com.trevorplus.config.AcceptMode.AUTO, Settings.fromMap(oldAuto).accept());
+        eq("old file without it is Manual", com.trevorplus.config.AcceptMode.MANUAL, Settings.fromMap(upgrading).accept());
+        Settings am = new Settings(); am.acceptMode = com.trevorplus.config.AcceptMode.CLICK.name();
+        eq("accept mode roundtrip", com.trevorplus.config.AcceptMode.CLICK, Settings.fromMap(FlatJson.decode(FlatJson.encode(am.toMap()))).accept());
+        Rig cl = new Rig(); cl.settings.acceptMode = com.trevorplus.config.AcceptMode.CLICK.name();
+        cl.say("[NPC] Trevor: Ready?");
+        cl.engine.onQuestPrompt("/chatprompt abc YES");
+        cl.clock.add(1000);
+        check("click mode never auto-sends", cl.engine.autoAcceptCommand() == null && cl.engine.promptFresh());
+        check("prompt countdown", cl.engine.promptRemainingMs() > 3900 && cl.engine.promptRemainingMs() <= 4000);
+        eq("click hands out the command", "/chatprompt abc YES", cl.engine.takePrompt());
+        check("countdown gone after accepting", cl.engine.promptRemainingMs() == 0);
+
+        // shuriken tiers
+        Settings sk = new Settings();
+        check("shuriken all tiers by default", java.util.Arrays.stream(Rarity.values()).allMatch(sk::shurikenFor) && sk.shurikenFor(null));
+        sk.setShurikenFor(Rarity.TRACKABLE, false); sk.setShurikenFor(Rarity.UNTRACKABLE, false);
+        check("tiers switch off", !sk.shurikenFor(Rarity.TRACKABLE) && !sk.shurikenFor(Rarity.UNTRACKABLE) && sk.shurikenFor(Rarity.ELUSIVE));
+        eq("tiers stored in order", "UNDETECTED,ENDANGERED,ELUSIVE", sk.shurikenRarities);
+        sk.setShurikenFor(Rarity.TRACKABLE, true);
+        eq("tier back on keeps order", "TRACKABLE,UNDETECTED,ENDANGERED,ELUSIVE", sk.shurikenRarities);
+        check("tiers roundtrip", !Settings.fromMap(FlatJson.decode(FlatJson.encode(sk.toMap()))).shurikenFor(Rarity.UNTRACKABLE));
+        Settings noTiers = new Settings(); for (Rarity x : Rarity.values()) noTiers.setShurikenFor(x, false);
+        check("no tiers stays empty after a save", !Settings.fromMap(FlatJson.decode(FlatJson.encode(noTiers.toMap()))).shurikenFor(Rarity.ELUSIVE));
+
         check("debug mode roundtrip", Settings.fromMap(FlatJson.decode(FlatJson.encode(dbg.toMap()))).debugMode);
+
+        // behind-walls mode
+        eq("fresh install esp", com.trevorplus.config.EspMode.DIM, Settings.fromMap(new java.util.LinkedHashMap<>()).esp());
+        eq("upgrade keeps always", com.trevorplus.config.EspMode.ALWAYS, Settings.fromMap(upgrading).esp());
+        Settings es = new Settings(); es.espMode = com.trevorplus.config.EspMode.VISIBLE.name();
+        eq("esp roundtrip", com.trevorplus.config.EspMode.VISIBLE, Settings.fromMap(FlatJson.decode(FlatJson.encode(es.toMap()))).esp());
+        es.espMode = "nonsense";
+        eq("bad esp falls back to dim", com.trevorplus.config.EspMode.DIM, es.esp());
+        eq("esp parse word", com.trevorplus.config.EspMode.VISIBLE, com.trevorplus.config.EspMode.parse(" Visible "));
+        check("esp parse junk", com.trevorplus.config.EspMode.parse("walls") == null);
+        eq("esp cycles", com.trevorplus.config.EspMode.ALWAYS, com.trevorplus.config.EspMode.VISIBLE.next());
+        eq("esp cycles back", com.trevorplus.config.EspMode.VISIBLE, com.trevorplus.config.EspMode.ALWAYS.previous());
+        Settings uc = new Settings(); uc.updateCheck = false;
+        check("update check on by default, roundtrips off", new Settings().updateCheck
+                && !Settings.fromMap(FlatJson.decode(FlatJson.encode(uc.toMap()))).updateCheck);
+
+        // update check: version picking
+        eq("extract display name", "2.4.0", com.trevorplus.update.Versions.extract("Trevor+ 2.4.0"));
+        eq("extract file name", "2.4.1", com.trevorplus.update.Versions.extract("trevorplus-2.4.1-26.2.jar"));
+        eq("extract short", "3.0.0", com.trevorplus.update.Versions.extract("Trevor+ 3.0"));
+        check("extract none", com.trevorplus.update.Versions.extract("Trevor+") == null);
+        check("compare", com.trevorplus.update.Versions.compare("2.10.0", "2.9.9") > 0
+                && com.trevorplus.update.Versions.compare("2.3.0+26.2", "2.3.0") == 0
+                && com.trevorplus.update.Versions.compare("2.3", "2.3.1") < 0);
+        var files = java.util.List.of(
+                new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.3.0", "trevorplus-2.3.0-26.2.jar", 4, 1, java.util.List.of("Client", "Fabric", "26.2")),
+                new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.5.0", "x.jar", 3, 1, java.util.List.of("26.2")),       // under review
+                new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.6.0", "x.jar", 4, 2, java.util.List.of("26.2")),       // beta
+                new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.7.0", "x.jar", 4, 1, java.util.List.of("26.3")),       // other MC
+                new com.trevorplus.update.Versions.RemoteFile("Trevor+ 2.4.0", "x.jar", 4, 1, java.util.List.of("Fabric", "26.2")));
+        eq("newest usable release", "2.4.0", com.trevorplus.update.Versions.newest(files, "26.2"));
+        check("nothing for unknown MC", com.trevorplus.update.Versions.newest(files, "1.8.9") == null);
+        check("newer than running", com.trevorplus.update.Versions.isNewer("2.4.0", "2.3.0+26.2"));
+        check("same is not newer", !com.trevorplus.update.Versions.isNewer("2.3.0", "2.3.0+26.2")
+                && !com.trevorplus.update.Versions.isNewer(null, "2.3.0"));
 
         // the real tag from the log: pieces split, aqua icon (custom font, prints blank) after the heart
         var real = java.util.List.of(

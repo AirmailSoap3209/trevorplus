@@ -1,5 +1,7 @@
 package com.trevorplus.client;
 
+import com.trevorplus.config.AcceptMode;
+import com.trevorplus.config.EspMode;
 import com.trevorplus.config.Settings;
 import com.trevorplus.core.HudLines;
 import java.util.ArrayList;
@@ -50,13 +52,17 @@ final class WelcomeScreen extends Screen {
                 + "Click to cycle. Change it whenever Vincent's event changes.",
                 () -> s.multiplier + "x", () -> HudLines.GOLD,
                 () -> { TrevorplusClient.engine().setMultiplier(s.multiplier % 3 + 1); save(); }));
+        if (BuildFlags.ESP) rows.add(new Row("Behind walls", "How the mob box and Theodolite blocks show when a wall is in the way: always, "
+                + "faded, or only while in sight. Click to cycle.",
+                () -> s.esp().label, () -> s.esp() == EspMode.ALWAYS ? HudLines.WARN : HudLines.GOOD,
+                () -> { s.espMode = s.esp().next().name(); save(); }));
         rows.add(new Row("Sound cues", "Short sounds for rarity alerts, Pelt Dyes, the mob being found and Trevor being ready.",
                 () -> s.soundEnabled ? "ON" : "OFF", () -> s.soundEnabled ? HudLines.GOOD : HudLines.BAD,
                 () -> { s.soundEnabled = !s.soundEnabled; save(); }));
-        rows.add(new Row("Auto-accept quests", "Sends Trevor's [YES] for you right after he offers a quest. Off by default: "
-                + "check the server's rules on automation before turning it on.",
-                () -> s.autoAccept ? "ON" : "OFF", () -> s.autoAccept ? HudLines.GOOD : HudLines.BAD,
-                () -> { s.autoAccept = !s.autoAccept; save(); }));
+        rows.add(new Row("Accept quests", "Warp key / chat: press the warp key or click [YES]. Click to accept: a button "
+                + "appears, one left click takes the quest. Automatic: sent for you (check the server's rules first).",
+                () -> s.accept().label, () -> s.accept() == AcceptMode.AUTO ? HudLines.WARN : HudLines.GOOD,
+                () -> { s.acceptMode = s.accept().next().name(); save(); }));
         rows.add(new Row("Smart warp key", "One press accepts Trevor's prompt, otherwise warps to the quest area, otherwise "
                 + "to the Trapper. Rebind it under Options > Controls > Key Binds > Trevor+.",
                 TrevorplusClient::navKeyName, () -> HudLines.GOLD, () -> { }));
@@ -111,8 +117,9 @@ final class WelcomeScreen extends Screen {
         g.fill(px, py, px + pw, py + ph, 0xF0101218);
         HudPainter.rect(g, px, py, px + pw, py + ph, 1, 0xFF3A4658);
         g.fill(px, py, px + pw, py + 2, HudLines.ACCENT);
-        g.text(font, "TREVOR+", px + 10, py + 8, HudLines.ACCENT, true);
-        g.text(font, "welcome", px + 10 + font.width("TREVOR+ "), py + 8, HudLines.LABEL, true);
+        String title = BuildFlags.NAME.toUpperCase(java.util.Locale.ROOT);
+        g.text(font, title, px + 10, py + 8, HudLines.ACCENT, true);
+        g.text(font, "welcome", px + 10 + font.width(title + " "), py + 8, HudLines.LABEL, true);
 
         int ly = py + 24;
         for (String line : wrap(font, INTRO, pw - 20, 4)) {

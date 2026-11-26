@@ -23,6 +23,32 @@ jobs:
           distribution: 'microsoft'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
+      - name: check publishing setup
+        # Without this, a missing project ID or token makes publishMods skip that site and still "succeed".
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+        run: |
+          prop() { sed -n "s/^$1=//p" gradle.properties | tr -d '[:space:]'; }
+          configured=0
+          for site in modrinth curseforge modrinth_lite curseforge_lite; do
+            id=$(prop "${site}_id")
+            token_var=$(echo "${site%_lite}_TOKEN" | tr '[:lower:]' '[:upper:]')    # lite uses the same token
+            token=$(printenv "$token_var" || true)
+            if [ -z "$id" ]; then
+              echo "::warning::${site}_id is empty in gradle.properties, so nothing will be uploaded to ${site}."
+            elif [ -z "$token" ]; then
+              echo "::error::${site}_id is set but the ${token_var} repository secret is missing (Settings > Secrets and variables > Actions)."
+              exit 1
+            else
+              echo "${site}: project ${id}, token present."
+              configured=$((configured + 1))
+            fi
+          done
+          if [ "$configured" -eq 0 ]; then
+            echo "::error::No site is set up to publish to. Fill in modrinth_id and/or curseforge_id in gradle.properties."
+            exit 1
+          fi
       - name: logic tests
         run: sh tools/run-tests.sh
       - name: build and publish

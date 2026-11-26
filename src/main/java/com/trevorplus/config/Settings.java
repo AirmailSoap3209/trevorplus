@@ -60,8 +60,11 @@ public final class Settings {
     public boolean highlightEnabled = true;
     /** Used for the on-screen mob box when the game's own FOV setting cannot be read. */
     public int fovDegrees = 70;
-    /** Accept Trevor's [YES] prompt by itself. Off by default, see the README. */
-    public boolean autoAccept = false;
+    /** How Trevor's [YES] prompt is accepted (AcceptMode name). Manual by default, see the README. */
+    public String acceptMode = AcceptMode.MANUAL.name();
+    /** Click-to-accept button: horizontal centre and top edge; -1 = default placement. */
+    public int acceptX = -1;
+    public int acceptY = -1;
     /** Flash a banner when a quest of at least alertMin rarity starts (or a dye drops). */
     public boolean alertsEnabled = true;
     /** Draw Theodolite hint rings on screen. */
@@ -73,8 +76,14 @@ public final class Settings {
     public String alertMin = "ENDANGERED";
     /** Remind to apply a Shuriken while the quest mob is near and its name tag shows no marker. */
     public boolean shurikenReminder = true;
+    /** Rarities the Shuriken reminder fires for, as comma-separated Rarity names. Default: all of them. */
+    public String shurikenRarities = ALL_RARITIES;
     /** The icon text learned with /trevorplus shuriken learn; empty = detect any blue symbol. */
     public String shurikenMarker = "";
+    /** Mob box, glow outline and Theodolite blocks behind walls: see EspMode. Stored as the enum name. */
+    public String espMode = EspMode.DIM.name();
+    /** Look for a newer release on CurseForge at start-up (one anonymous request). */
+    public boolean updateCheck = true;
     /** True once the first-launch welcome screen has been shown (or skipped). */
     public boolean welcomeShown = false;
     /**
@@ -89,6 +98,39 @@ public final class Settings {
     public com.trevorplus.quests.Rarity alertMinRarity() {
         com.trevorplus.quests.Rarity r = com.trevorplus.quests.Rarity.parse(alertMin);
         return r == null ? com.trevorplus.quests.Rarity.ENDANGERED : r;
+    }
+
+    private static final String ALL_RARITIES = java.util.Arrays.stream(com.trevorplus.quests.Rarity.values())
+            .map(Enum::name).collect(java.util.stream.Collectors.joining(","));
+
+    /** Accept mode; falls back to Manual if the saved text is not a mode. */
+    public AcceptMode accept() {
+        AcceptMode m = AcceptMode.parse(acceptMode);
+        return m == null ? AcceptMode.MANUAL : m;
+    }
+
+    /** Whether the Shuriken reminder fires for a mob of this rarity (unknown rarity: yes). */
+    public boolean shurikenFor(com.trevorplus.quests.Rarity r) {
+        if (r == null) return true;
+        for (String part : shurikenRarities.split(",")) {
+            if (part.trim().equalsIgnoreCase(r.name())) return true;
+        }
+        return false;
+    }
+
+    /** Switches the reminder on or off for one rarity, keeping the list in rarity order. */
+    public void setShurikenFor(com.trevorplus.quests.Rarity r, boolean on) {
+        StringBuilder out = new StringBuilder();
+        for (com.trevorplus.quests.Rarity x : com.trevorplus.quests.Rarity.values()) {
+            if (x == r ? on : shurikenFor(x)) out.append(out.length() == 0 ? "" : ",").append(x.name());
+        }
+        shurikenRarities = out.toString();
+    }
+
+    /** Behind-walls mode; falls back to Dim if the saved text is not a mode. */
+    public EspMode esp() {
+        EspMode m = EspMode.parse(espMode);
+        return m == null ? EspMode.DIM : m;
     }
 
     public void setMultiplier(int m) { multiplier = Math.max(1, Math.min(3, m)); }
@@ -135,7 +177,9 @@ public final class Settings {
         m.put("alertY", alertY);
         m.put("highlightEnabled", highlightEnabled);
         m.put("fovDegrees", fovDegrees);
-        m.put("autoAccept", autoAccept);
+        m.put("acceptMode", acceptMode);
+        m.put("acceptX", acceptX);
+        m.put("acceptY", acceptY);
         m.put("alertsEnabled", alertsEnabled);
         m.put("ringsEnabled", ringsEnabled);
         m.put("blocksEnabled", blocksEnabled);
@@ -143,6 +187,9 @@ public final class Settings {
         m.put("alertMin", alertMin);
         m.put("shurikenReminder", shurikenReminder);
         m.put("shurikenMarker", shurikenMarker);
+        m.put("shurikenRarities", shurikenRarities);
+        m.put("espMode", espMode);
+        m.put("updateCheck", updateCheck);
         m.put("welcomeShown", welcomeShown);
         if (debugMode) m.put("debugMode", true);      // stays out of the file unless someone turned it on
         for (Map.Entry<String, String> e : warpOverrides.entrySet()) m.put("warp." + e.getKey(), e.getValue());
@@ -186,7 +233,11 @@ public final class Settings {
         s.alertY = (int) FlatJson.lng(m, "alertY", -1);
         s.highlightEnabled = FlatJson.bool(m, "highlightEnabled", true);
         s.fovDegrees = (int) Math.max(30, Math.min(130, FlatJson.lng(m, "fovDegrees", 70)));
-        s.autoAccept = FlatJson.bool(m, "autoAccept", false);
+        // older files only have the on/off autoAccept flag
+        s.acceptMode = FlatJson.str(m, "acceptMode",
+                (FlatJson.bool(m, "autoAccept", false) ? AcceptMode.AUTO : AcceptMode.MANUAL).name());
+        s.acceptX = (int) FlatJson.lng(m, "acceptX", -1);
+        s.acceptY = (int) FlatJson.lng(m, "acceptY", -1);
         s.alertsEnabled = FlatJson.bool(m, "alertsEnabled", true);
         s.ringsEnabled = FlatJson.bool(m, "ringsEnabled", false);
         s.blocksEnabled = FlatJson.bool(m, "blocksEnabled", true);
@@ -194,6 +245,10 @@ public final class Settings {
         s.alertMin = FlatJson.str(m, "alertMin", "ENDANGERED");
         s.shurikenReminder = FlatJson.bool(m, "shurikenReminder", true);
         s.shurikenMarker = FlatJson.str(m, "shurikenMarker", "");
+        s.shurikenRarities = FlatJson.str(m, "shurikenRarities", ALL_RARITIES);
+        // upgraders keep the old always-through-walls look; new installs start on Dim
+        s.espMode = FlatJson.str(m, "espMode", (m.isEmpty() ? EspMode.DIM : EspMode.ALWAYS).name());
+        s.updateCheck = FlatJson.bool(m, "updateCheck", true);
         // an existing settings file without the key belongs to someone upgrading: do not greet them as new
         s.welcomeShown = FlatJson.bool(m, "welcomeShown", !m.isEmpty());
         s.debugMode = FlatJson.bool(m, "debugMode", false);

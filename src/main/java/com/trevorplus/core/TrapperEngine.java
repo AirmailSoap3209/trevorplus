@@ -37,7 +37,7 @@ public final class TrapperEngine {
     static final long RECOVER_AFTER_FINISH_MS = 10_000;
     /** The [YES] prompt only counts if Trevor spoke just before it, and only for a few seconds. */
     static final long PROMPT_AFTER_TREVOR_MS = 5_000;
-    static final long PROMPT_FRESH_MS = 5_000;
+    public static final long PROMPT_FRESH_MS = 5_000;
     /** Short pause so the rest of Trevor's lines land before the auto-accept fires. */
     static final long AUTO_ACCEPT_DELAY_MS = 250;
     private static final long NEVER = -1_000_000_000L;
@@ -242,6 +242,11 @@ public final class TrapperEngine {
         return promptCommand != null && clock.monoMs() - promptMono <= PROMPT_FRESH_MS && !tracker.isActive();
     }
 
+    /** Milliseconds left before a pending prompt goes stale; 0 when none is pending. */
+    public long promptRemainingMs() {
+        return promptFresh() ? Math.max(0, PROMPT_FRESH_MS - (clock.monoMs() - promptMono)) : 0;
+    }
+
     /** Hands out the prompt command once and forgets it. Null when nothing fresh is pending. */
     public String takePrompt() {
         if (!promptFresh()) return null;
@@ -255,7 +260,7 @@ public final class TrapperEngine {
      * short delay has passed. At most once per prompt. The glue polls this every client tick.
      */
     public String autoAcceptCommand() {
-        if (!settings.autoAccept || !promptFresh()) return null;
+        if (settings.accept() != com.trevorplus.config.AcceptMode.AUTO || !promptFresh()) return null;
         if (clock.monoMs() - promptMono < AUTO_ACCEPT_DELAY_MS) return null;
         return takePrompt();
     }

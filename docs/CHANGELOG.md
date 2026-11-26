@@ -139,3 +139,34 @@ top-face painting that cost most of the FPS.
 - Removed the template example mixins. Release jars are named `trevorplus-<version>+<mc>.jar`.
 - Modrinth and CurseForge publishing via `./gradlew publishMods` and a release workflow (docs/PUBLISHING.md).
 - `tools/run-tests.sh` works on Windows (Git Bash) too, and CI runs it.
+
+## 2.4.0 – Behind-walls mode, Mod Menu, update notice
+
+- ESP mode (`espMode`): Always / Dim behind walls / Only when visible, for the mob box and edge pointer, the glow
+  outline and the 3D Theodolite blocks. Line of sight to the mob is a block walk every other tick (same test as the
+  block scan); blocks use a second, depth-tested pipeline. The direction line stays regardless. New installs default
+  to Dim, existing settings files to Always. Menu row, welcome-screen row, `/trevorplus esp`.
+- Mod Menu (optional, compileOnly): Configure opens the settings screen, which now returns to its parent on close.
+- Update check against CurseForge's public file list (approved release files for the running MC version only),
+  announced once in chat with a link; also Mod Menu's update checker. `updateCheck` setting, on by default.
+  Project ID and slug come from gradle.properties via fabric.mod.json.
+- Settings menu rebuilt: category sidebar (General, HUD, Mob finder, Theodolite, Alerts, Chat), section headers,
+  pill toggles, dependent rows indented and disabled while their parent is off, wheel scrolling instead of pages,
+  last category remembered.
+- Accept mode (`acceptMode`: MANUAL / CLICK / AUTO) replaces the `autoAccept` flag (old `true` becomes AUTO).
+  CLICK shows a movable button with a countdown while the 5 s prompt window is open; a left click in game (swallowed
+  before vanilla's attack handling) or a click on the button with chat open accepts. `/trevorplus accept`, with
+  `autoaccept on|off` kept as an alias.
+- Shuriken reminder per rarity (`shurikenRarities`, all by default): menu rows and `/trevorplus shuriken tier <rarity>`.
+
+## 2.5.0 – Trevor+ Lite
+
+- Second variant, Trevor+ Lite (mod id `trevorplus-lite`), from the same sources. The build generates
+  `BuildFlags` (ESP, MOD_ID, NAME) per variant; `compileLiteClientJava` + `processLiteResources` + `liteJar` build the
+  lite jar, and `build` produces both. ESP code is guarded by `if (BuildFlags.ESP)` so javac drops it from the lite
+  bytecode: mob box, edge pointer and direction line (`renderFinder`, `drawFinderBar`), glow (`MobFinder.setGlow`),
+  the see-through block pipeline and the screen-overlay fallback. Lite always draws Theodolite boxes depth-tested.
+  Mob-found ping and chat line stay in Lite without the distance.
+- `fabric.mod.json` is a template now (id, name, description, `breaks` on the other variant, CurseForge id/slug).
+- Publishing: `modrinthLite` / `curseforgeLite` targets with their own jar and display name; the release workflow's
+  setup check covers them.

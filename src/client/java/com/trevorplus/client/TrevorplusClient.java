@@ -7,6 +7,8 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.trevorplus.Trevorplus;
 import com.trevorplus.alerts.AlertQueue;
 import com.trevorplus.alerts.ShurikenReminder;
+import com.trevorplus.config.AcceptMode;
+import com.trevorplus.config.EspMode;
 import com.trevorplus.config.Settings;
 import com.trevorplus.core.Clock;
 import com.trevorplus.core.EngineListener;
@@ -46,12 +48,15 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
@@ -91,6 +96,8 @@ public class TrevorplusClient implements ClientModInitializer {
     private static volatile String currentZone;
     private static long hudCacheNanos;
     private static MobFinder.Target lastTarget;
+    /** Whether the quest mob is in direct sight (no solid block between eye and mob), refreshed every other tick. */
+    private static volatile boolean targetVisible = true;
 
     @Override
     public void onInitializeClient() {
@@ -100,6 +107,7 @@ public class TrevorplusClient implements ClientModInitializer {
         engine = new TrapperEngine(Clock.SYSTEM, settings, store, TrevorplusClient::playerPos,
                 new Listener(), msg -> verbose("[engine] {}", msg));
 
+        UpdateCheck.start();       // background, once; does nothing when switched off
         navKey = Keybinds.registerNavKey();
         uiKey = Keybinds.registerUiKey();
 
@@ -128,6 +136,29 @@ public class TrevorplusClient implements ClientModInitializer {
             }
         });
 
+        // Click to accept: in game a left click accepts (and is swallowed, so it does not hit anything);
+        // this runs before vanilla reads the attack key. With chat open, clicking the button accepts.
+        ClientTickEvents.START_CLIENT_TICK.register(mc -> {
+            try {
+                if (mc.player == null || mc.gui.screen() != null || !acceptButtonShown()) return;
+                boolean clicked = false;
+                while (mc.options.keyAttack.consumeClick()) clicked = true;
+                if (clicked) clickAccept(mc);
+            } catch (RuntimeException e) {
+                Trevorplus.LOGGER.error("accept click failed", e);
+            }
+        });
+        ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> {
+            if (!(screen instanceof ChatScreen)) return;
+            ScreenMouseEvents.allowMouseClick(screen).register((s, ev) -> {
+                if (ev.button() != 0 || !acceptButtonShown()) return true;
+                int gw = mc.getWindow().getGuiScaledWidth(), gh = mc.getWindow().getGuiScaledHeight();
+                if (!acceptBox(mc.font, gw, gh).contains(ev.x(), ev.y())) return true;
+                clickAccept(mc);
+                return false;          // the click is used up
+            });
+        });
+
         ClientPlayConnectionEvents.DISCONNECT.register((handler, mc) -> serverChanged());
         ClientPlayConnectionEvents.JOIN.register((handler, sender, mc) -> serverChanged());
         ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> engine.shutdown());
@@ -140,9 +171,10 @@ public class TrevorplusClient implements ClientModInitializer {
         HudElementRegistry.attachElementBefore(VanillaHudElements.SLEEP, Trevorplus.id("hud"), TrevorplusClient::renderHud);
         HudElementRegistry.attachElementBefore(VanillaHudElements.SLEEP, Trevorplus.id("hud2"), TrevorplusClient::renderHud2);
         HudElementRegistry.attachElementBefore(VanillaHudElements.SLEEP, Trevorplus.id("zone"), TrevorplusClient::renderZone);
-        HudElementRegistry.attachElementBefore(VanillaHudElements.SLEEP, Trevorplus.id("finder"), TrevorplusClient::renderFinder);
+        if (BuildFlags.ESP) HudElementRegistry.attachElementBefore(VanillaHudElements.SLEEP, Trevorplus.id("finder"), TrevorplusClient::renderFinder);
         HudElementRegistry.attachElementBefore(VanillaHudElements.SLEEP, Trevorplus.id("rings"), TrevorplusClient::renderRings);
         HudElementRegistry.attachElementBefore(VanillaHudElements.SLEEP, Trevorplus.id("alert"), TrevorplusClient::renderAlert);
+        HudElementRegistry.attachElementBefore(VanillaHudElements.SLEEP, Trevorplus.id("accept"), TrevorplusClient::renderAccept);
 
         Trevorplus.LOGGER.info("Trevor+ client ready, data folder: {}", dir);
     }
@@ -172,8 +204,10 @@ public class TrevorplusClient implements ClientModInitializer {
         }
         if (mc.level == null || mc.player == null) return;
         trackPositions(mc);
+        if (tickCount % 2 == 0) updateSight(mc);
+        UpdateCheck.announceIfNeeded();
 
-        String auto = overlaysOn ? engine.autoAcceptCommand() : null;           // only when /trevorplus autoaccept on
+        String auto = overlaysOn ? engine.autoAcceptCommand() : null;           // only in the Automatic accept mode
         if (auto != null) {
             sendCommand(mc, auto);
             if (settings.msgAccepted) tell("Quest accepted automatically.");
@@ -213,6 +247,19 @@ public class TrevorplusClient implements ClientModInitializer {
         }
     }
 
+    /** Line of sight to the mob's body or head; drives the Dim / Only-when-visible modes and the glow outline. */
+    private static void updateSight(Minecraft mc) {
+        MobFinder.Target t = MobFinder.current();
+        if (t == null) {
+            targetVisible = true;
+        } else {
+            double ex = mc.player.getX(), ey = mc.player.getY() + mc.player.getEyeHeight(), ez = mc.player.getZ();
+            targetVisible = BlockHighlight.visible(mc, ex, ey, ez, t.x(), t.y() + 0.5, t.z())
+                    || BlockHighlight.visible(mc, ex, ey, ez, t.x(), t.y() + 1.3, t.z());
+        }
+        MobFinder.setGlowAllowed(settings.esp() == EspMode.ALWAYS || targetVisible);
+    }
+
     /** Disconnect, join or server hop: the quest is gone, so forget it (nothing is saved). */
     private static void serverChanged() {
         MobFinder.clear();
@@ -225,24 +272,30 @@ public class TrevorplusClient implements ClientModInitializer {
 
     private static void findMob(Minecraft mc) {
         var quest = engine.tracker().current();
-        boolean wanted = settings.highlightEnabled || settings.shurikenReminder;
+        // Lite has no highlight: the mob is still recognised for the Shuriken reminder and the found ping
+        boolean glow = BuildFlags.ESP && settings.highlightEnabled;
+        boolean announce = BuildFlags.ESP ? settings.highlightEnabled : settings.msgFound || settings.mobFoundPing;
+        boolean wanted = announce || settings.shurikenReminder;
         if (!wanted || quest.isEmpty()) {
             MobFinder.clear();
             lastTarget = null;
             shuriken.update(nowMs(), false, quest.isPresent(), false);
             return;
         }
-        MobFinder.Target t = MobFinder.scan(mc, quest.get(), settings.highlightEnabled);
-        if (t != null && lastTarget == null && settings.highlightEnabled) {
-            double d = Math.sqrt(sq(t.x() - mc.player.getX()) + sq(t.y() - mc.player.getY()) + sq(t.z() - mc.player.getZ()));
-            if (settings.msgFound) tell("Found " + t.label() + ", " + Math.round(d) + " blocks away.");
-            if (settings.mobFoundPing) {
-                alerts.push("MOB FOUND  -  " + Math.round(d) + "m", HudLines.color(t.rarity()), nowMs(), 2000);
-                SoundCue.found();
+        MobFinder.Target t = MobFinder.scan(mc, quest.get(), glow);
+        if (t != null && lastTarget == null && announce) {
+            if (BuildFlags.ESP) {
+                double d = Math.sqrt(sq(t.x() - mc.player.getX()) + sq(t.y() - mc.player.getY()) + sq(t.z() - mc.player.getZ()));
+                if (settings.msgFound) tell("Found " + t.label() + ", " + Math.round(d) + " blocks away.");
+                if (settings.mobFoundPing) alerts.push("MOB FOUND  -  " + Math.round(d) + "m", HudLines.color(t.rarity()), nowMs(), 2000);
+            } else {          // no distance in Lite: it would say where the mob is
+                if (settings.msgFound) tell("Found " + t.label() + " nearby.");
+                if (settings.mobFoundPing) alerts.push("MOB FOUND", HudLines.color(t.rarity()), nowMs(), 2000);
             }
+            if (settings.mobFoundPing) SoundCue.found();
         }
         lastTarget = t;
-        boolean unmarkedNearby = t != null && Boolean.FALSE.equals(t.shuriken())
+        boolean unmarkedNearby = t != null && settings.shurikenFor(t.rarity()) && Boolean.FALSE.equals(t.shuriken())
                 && sq(t.x() - mc.player.getX()) + sq(t.y() - mc.player.getY()) + sq(t.z() - mc.player.getZ()) <= 40.0 * 40.0;
         if (shuriken.update(nowMs(), settings.shurikenReminder, true, unmarkedNearby)) {
             alerts.push("APPLY SHURIKEN", 0xFF55AAFF, nowMs(), 2500);
@@ -367,7 +420,7 @@ public class TrevorplusClient implements ClientModInitializer {
         float yaw = mc.player.getYRot(), pitch = mc.player.getXRot();
         dotBudget = 6000;
 
-        if (settings.blocksEnabled && !BlockXray.active()) BlockHighlight.draw(g, ex, ey, ez, yaw, pitch, fov, aspect, W, H, 0x6655E0FF);
+        if (BuildFlags.ESP && settings.blocksEnabled && !BlockXray.active()) BlockHighlight.draw(g, ex, ey, ez, yaw, pitch, fov, aspect, W, H, 0x6655E0FF);
 
         if (settings.ringsEnabled) {
             int from = Math.max(0, rings.size() - 4);
@@ -441,6 +494,49 @@ public class TrevorplusClient implements ClientModInitializer {
         g.text(font, text, x + (w - tw) / 2, y + (h - font.lineHeight) / 2 + 1, (a << 24) | rgb, true);
     }
 
+    // ---- click to accept ----------------------------------------------------------------------
+
+    private static final String ACCEPT_TEXT = "CLICK TO ACCEPT QUEST";
+    private static final String ACCEPT_SUB = "left click, or click here with chat open";
+
+    /** The button shows while a fresh prompt is pending in Click mode (and overlays are on). */
+    static boolean acceptButtonShown() {
+        return overlaysOn && settings.accept() == AcceptMode.CLICK && engine.promptFresh();
+    }
+
+    static HudPainter.Box acceptBox(Font font, int W, int H) {
+        int w = Math.max(font.width("\u00a7l" + ACCEPT_TEXT), font.width(ACCEPT_SUB)) + 28, h = 34;
+        int cx = settings.acceptX >= 0 ? settings.acceptX : W / 2;
+        int top = settings.acceptY >= 0 ? settings.acceptY : (int) (H * 0.6);
+        return new HudPainter.Box(cx - w / 2, top, w, h);
+    }
+
+    /** @param left fraction of the prompt window still open, drawn as a shrinking bar */
+    static void drawAcceptButton(GuiGraphicsExtractor g, Font font, double left) {
+        HudPainter.Box b = acceptBox(font, g.guiWidth(), g.guiHeight());
+        int x = b.x(), y = b.y(), w = b.w(), h = b.h();
+        g.fill(x, y, x + w, y + h, 0xD0101218);
+        HudPainter.rect(g, x, y, x + w, y + h, 2, HudLines.GOOD);
+        String t = "\u00a7l" + ACCEPT_TEXT;
+        g.text(font, t, x + (w - font.width(t)) / 2, y + 6, HudLines.GOOD, true);
+        g.text(font, ACCEPT_SUB, x + (w - font.width(ACCEPT_SUB)) / 2, y + 18, HudLines.LABEL, true);
+        int bar = (int) Math.round((w - 4) * Math.max(0, Math.min(1, left)));
+        g.fill(x + 2, y + h - 4, x + 2 + bar, y + h - 2, HudLines.GOOD);
+    }
+
+    private static void renderAccept(GuiGraphicsExtractor g, DeltaTracker delta) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.gui.hud.isHidden() || mc.gui.screen() instanceof TrevorUiScreen || !acceptButtonShown()) return;
+        drawAcceptButton(g, mc.font, engine.promptRemainingMs() / (double) TrapperEngine.PROMPT_FRESH_MS);
+    }
+
+    private static void clickAccept(Minecraft mc) {
+        String cmd = engine.takePrompt();
+        if (cmd == null) return;
+        sendCommand(mc, cmd);
+        if (settings.msgAccepted) tell("Quest accepted.");
+    }
+
     static HudPainter.Box finderBox(Font font, String text, int W) {
         int w = font.width(text);
         int cx = settings.finderX >= 0 ? settings.finderX : W / 2;
@@ -449,10 +545,12 @@ public class TrevorplusClient implements ClientModInitializer {
     }
 
     static void drawFinderBar(GuiGraphicsExtractor g, Font font, String text, int color) {
-        HudPainter.Box b = finderBox(font, text, g.guiWidth());
-        g.fill(b.x(), b.y(), b.x() + b.w(), b.y() + b.h(), 0xC0101218);
-        g.fill(b.x(), b.y(), b.x() + 2, b.y() + b.h(), color);
-        g.text(font, text, b.x() + 4, b.y() + 3, color, true);
+        if (BuildFlags.ESP) {          // compiled out of Trevor+ Lite
+            HudPainter.Box b = finderBox(font, text, g.guiWidth());
+            g.fill(b.x(), b.y(), b.x() + b.w(), b.y() + b.h(), 0xC0101218);
+            g.fill(b.x(), b.y(), b.x() + 2, b.y() + b.h(), color);
+            g.text(font, text, b.x() + 4, b.y() + 3, color, true);
+        }
     }
 
     // used by the settings screen
@@ -497,49 +595,59 @@ public class TrevorplusClient implements ClientModInitializer {
      * math (see Projection), drawn through walls; at the screen edge it becomes a pointer.
      */
     private static void renderFinder(GuiGraphicsExtractor g, DeltaTracker delta) {
-        Minecraft mc = Minecraft.getInstance();
-        MobFinder.Target t = MobFinder.current();
-        if (!overlaysOn || !settings.highlightEnabled || t == null || mc.player == null || mc.gui.hud.isHidden()
-                || !targetInterp.has() || !playerInterp.has()) return;
-        float pt = delta.getGameTimeDeltaPartialTick(false);
-        double tx = targetInterp.x(pt), ty = targetInterp.y(pt), tz = targetInterp.z(pt);
-        double ex = playerInterp.x(pt), ey = playerInterp.y(pt) + mc.player.getEyeHeight(), ez = playerInterp.z(pt);
-        double dist = Math.sqrt(sq(tx - ex) + sq(ty - ey) + sq(tz - ez));
-        double rel = Bearing.relativeDegrees(ex, ez, mc.player.getYRot(), tx, tz);
-        String height = Bearing.heightHint(ty - (ey - mc.player.getEyeHeight()));
-        String text = t.label() + "  " + Math.round(dist) + "m  " + Bearing.arrow(rel) + (height.isEmpty() ? "" : "  (" + height + ")")
-                + (Boolean.FALSE.equals(t.shuriken()) ? "  no Shuriken" : Boolean.TRUE.equals(t.shuriken()) ? "  Shuriken on" : "");
-        Font font = mc.font;
-        int color = HudLines.color(t.rarity());
-        drawFinderBar(g, font, text, color);
+        if (BuildFlags.ESP) {          // compiled out of Trevor+ Lite
+            Minecraft mc = Minecraft.getInstance();
+            MobFinder.Target t = MobFinder.current();
+            if (!overlaysOn || !settings.highlightEnabled || t == null || mc.player == null || mc.gui.hud.isHidden()
+                    || !targetInterp.has() || !playerInterp.has()) return;
+            float pt = delta.getGameTimeDeltaPartialTick(false);
+            double tx = targetInterp.x(pt), ty = targetInterp.y(pt), tz = targetInterp.z(pt);
+            double ex = playerInterp.x(pt), ey = playerInterp.y(pt) + mc.player.getEyeHeight(), ez = playerInterp.z(pt);
+            double dist = Math.sqrt(sq(tx - ex) + sq(ty - ey) + sq(tz - ez));
+            double rel = Bearing.relativeDegrees(ex, ez, mc.player.getYRot(), tx, tz);
+            String height = Bearing.heightHint(ty - (ey - mc.player.getEyeHeight()));
+            String text = t.label() + "  " + Math.round(dist) + "m  " + Bearing.arrow(rel) + (height.isEmpty() ? "" : "  (" + height + ")")
+                    + (Boolean.FALSE.equals(t.shuriken()) ? "  no Shuriken" : Boolean.TRUE.equals(t.shuriken()) ? "  Shuriken on" : "");
+            Font font = mc.font;
+            int color = HudLines.color(t.rarity());
+            drawFinderBar(g, font, text, color);      // the direction line is a compass, not ESP: always shown
 
-        int W = g.guiWidth(), H = g.guiHeight();
-        int game = gameFov();
-        double fov = game > 0 ? game : settings.fovDegrees;
-        Projection.Result r = Projection.project(ex, ey, ez, mc.player.getYRot(), mc.player.getXRot(),
-                fov, (double) W / H, tx, ty + 0.6, tz);
-        if (r.onScreen()) {
-            double tanHalf = Math.tan(Math.toRadians(fov) / 2.0);
-            int half = (int) Math.max(7, Math.min(150, 0.75 / (r.depth() * tanHalf) * (H / 2.0)));
-            int sx = (int) ((r.nx() + 1) / 2 * W), sy = (int) ((1 - r.ny()) / 2 * H);
-            HudPainter.rect(g, sx - half - 1, sy - half - 1, sx + half + 1, sy + half + 1, 4, 0xFF000000);
-            HudPainter.rect(g, sx - half, sy - half, sx + half, sy + half, 2, color);
-            String tag = t.label() + "  " + Math.round(dist) + "m";
-            int tw = font.width(tag);
-            g.fill(sx - tw / 2 - 3, sy - half - font.lineHeight - 6, sx + tw / 2 + 3, sy - half - 2, 0xC0101218);
-            g.text(font, tag, sx - tw / 2, sy - half - font.lineHeight - 4, color, true);
-        } else {
-            double ax = r.nx(), ay = r.ny();
-            double m = Math.max(Math.abs(ax), Math.abs(ay));
-            if (m < 1e-9) { ax = 0; ay = -1; } else { ax /= m; ay /= m; }
-            int sx = (int) (W / 2.0 + ax * (W / 2.0 - 16)), sy = (int) (H / 2.0 - ay * (H / 2.0 - 16));
-            g.fill(sx - 6, sy - 6, sx + 6, sy + 6, 0xFF000000);
-            g.fill(sx - 5, sy - 5, sx + 5, sy + 5, color);
-            String tag = Math.round(dist) + "m";
-            int tw = font.width(tag);
-            int lx = Math.max(2, Math.min(W - tw - 2, sx - tw / 2));
-            int ly = sy < H / 2 ? sy + 9 : sy - 9 - font.lineHeight;
-            g.text(font, tag, lx, ly, color, true);
+            EspMode mode = settings.esp();
+            boolean blocked = !targetVisible;
+            if (blocked && mode == EspMode.VISIBLE) return;
+            boolean faded = blocked && mode == EspMode.DIM;
+            int boxColor = faded ? (color & 0xFFFFFF) | 0x60000000 : color;
+            int outline = faded ? 0x50000000 : 0xFF000000;
+            int tagBg = faded ? 0x60101218 : 0xC0101218;
+
+            int W = g.guiWidth(), H = g.guiHeight();
+            int game = gameFov();
+            double fov = game > 0 ? game : settings.fovDegrees;
+            Projection.Result r = Projection.project(ex, ey, ez, mc.player.getYRot(), mc.player.getXRot(),
+                    fov, (double) W / H, tx, ty + 0.6, tz);
+            if (r.onScreen()) {
+                double tanHalf = Math.tan(Math.toRadians(fov) / 2.0);
+                int half = (int) Math.max(7, Math.min(150, 0.75 / (r.depth() * tanHalf) * (H / 2.0)));
+                int sx = (int) ((r.nx() + 1) / 2 * W), sy = (int) ((1 - r.ny()) / 2 * H);
+                HudPainter.rect(g, sx - half - 1, sy - half - 1, sx + half + 1, sy + half + 1, 4, outline);
+                HudPainter.rect(g, sx - half, sy - half, sx + half, sy + half, 2, boxColor);
+                String tag = t.label() + "  " + Math.round(dist) + "m" + (faded ? "  (behind wall)" : "");
+                int tw = font.width(tag);
+                g.fill(sx - tw / 2 - 3, sy - half - font.lineHeight - 6, sx + tw / 2 + 3, sy - half - 2, tagBg);
+                g.text(font, tag, sx - tw / 2, sy - half - font.lineHeight - 4, boxColor, true);
+            } else {
+                double ax = r.nx(), ay = r.ny();
+                double m = Math.max(Math.abs(ax), Math.abs(ay));
+                if (m < 1e-9) { ax = 0; ay = -1; } else { ax /= m; ay /= m; }
+                int sx = (int) (W / 2.0 + ax * (W / 2.0 - 16)), sy = (int) (H / 2.0 - ay * (H / 2.0 - 16));
+                g.fill(sx - 6, sy - 6, sx + 6, sy + 6, outline);
+                g.fill(sx - 5, sy - 5, sx + 5, sy + 5, boxColor);
+                String tag = Math.round(dist) + "m";
+                int tw = font.width(tag);
+                int lx = Math.max(2, Math.min(W - tw - 2, sx - tw / 2));
+                int ly = sy < H / 2 ? sy + 9 : sy - 9 - font.lineHeight;
+                g.text(font, tag, lx, ly, boxColor, true);
+            }
         }
     }
 
@@ -776,6 +884,22 @@ public class TrevorplusClient implements ClientModInitializer {
                     return 1;
                 })));
 
+        if (BuildFlags.ESP) root.then(lit("esp")
+                .executes(c -> say(c.getSource(), "Behind walls: " + settings.esp().label
+                        + ". Use /trevorplus esp always | dim | visible"))
+                .then(RequiredArgumentBuilder.<FabricClientCommandSource, String>argument("mode", StringArgumentType.word())
+                        .suggests((c, b) -> {
+                            for (EspMode m : EspMode.values()) b.suggest(m.word);
+                            return b.buildFuture();
+                        })
+                        .executes(c -> {
+                            EspMode m = EspMode.parse(StringArgumentType.getString(c, "mode"));
+                            if (m == null) return say(c.getSource(), "Use one of: always dim visible");
+                            settings.espMode = m.name();
+                            saveSettings();
+                            return say(c.getSource(), "Behind walls: " + m.label);
+                        })));
+
         root.then(lit("rings").executes(c -> {
             settings.ringsEnabled = !settings.ringsEnabled;
             saveSettings();
@@ -824,7 +948,19 @@ public class TrevorplusClient implements ClientModInitializer {
                     saveSettings();
                     return say(c.getSource(), "Shuriken marker cleared: any blue symbol on the name tag counts.");
                 }))
-                .then(lit("learn").executes(c -> learnShuriken(c.getSource()))));
+                .then(lit("learn").executes(c -> learnShuriken(c.getSource())))
+                .then(lit("tier").then(RequiredArgumentBuilder.<FabricClientCommandSource, String>argument("rarity", StringArgumentType.word())
+                        .suggests((c, b) -> {
+                            for (Rarity r : Rarity.values()) b.suggest(r.name().toLowerCase(Locale.ROOT));
+                            return b.buildFuture();
+                        })
+                        .executes(c -> {
+                            Rarity r = Rarity.parse(StringArgumentType.getString(c, "rarity"));
+                            if (r == null) return say(c.getSource(), "Use one of: trackable untrackable undetected endangered elusive");
+                            settings.setShurikenFor(r, !settings.shurikenFor(r));
+                            saveSettings();
+                            return say(c.getSource(), "Shuriken reminder for " + r.label() + ": " + (settings.shurikenFor(r) ? "on" : "off"));
+                        }))));
 
         root.then(lit("ui").executes(c -> {
             openUi = true;       // opens as soon as the chat window has closed
@@ -840,26 +976,30 @@ public class TrevorplusClient implements ClientModInitializer {
                             + (gameFov() > 0 ? " (not used: the game's own FOV " + gameFov() + " is read automatically)" : ""));
                 })));
 
-        root.then(lit("highlight").executes(c -> {
+        if (BuildFlags.ESP) root.then(lit("highlight").executes(c -> {
             settings.highlightEnabled = !settings.highlightEnabled;
             if (!settings.highlightEnabled) MobFinder.clear();
             saveSettings();
             return say(c.getSource(), "Mob highlight " + (settings.highlightEnabled ? "on" : "off"));
         }));
 
+        root.then(lit("accept")
+                .executes(c -> say(c.getSource(), "Quest accept: " + settings.accept().label
+                        + ". Use /trevorplus accept manual | click | auto"))
+                .then(RequiredArgumentBuilder.<FabricClientCommandSource, String>argument("mode", StringArgumentType.word())
+                        .suggests((c, b) -> {
+                            for (AcceptMode m : AcceptMode.values()) b.suggest(m.word);
+                            return b.buildFuture();
+                        })
+                        .executes(c -> {
+                            AcceptMode m = AcceptMode.parse(StringArgumentType.getString(c, "mode"));
+                            if (m == null) return say(c.getSource(), "Use one of: manual click auto");
+                            return setAccept(c.getSource(), m);
+                        })));
+        // older name, kept so existing habits and notes still work
         root.then(lit("autoaccept")
-                .executes(c -> say(c.getSource(), "Auto-accept is " + (settings.autoAccept ? "ON" : "off")
-                        + ". Use /trevorplus autoaccept on  or  off"))
-                .then(lit("on").executes(c -> {
-                    settings.autoAccept = true;
-                    saveSettings();
-                    return say(c.getSource(), "Auto-accept ON: Trevor's [YES] is sent for you about a quarter second after it appears.");
-                }))
-                .then(lit("off").executes(c -> {
-                    settings.autoAccept = false;
-                    saveSettings();
-                    return say(c.getSource(), "Auto-accept off. The nav key still accepts the prompt.");
-                })));
+                .then(lit("on").executes(c -> setAccept(c.getSource(), AcceptMode.AUTO)))
+                .then(lit("off").executes(c -> setAccept(c.getSource(), AcceptMode.MANUAL))));
 
         data.then(lit("counts").then(RequiredArgumentBuilder.<FabricClientCommandSource, Integer>argument(
                 "trackable", IntegerArgumentType.integer(0))
@@ -929,7 +1069,7 @@ public class TrevorplusClient implements ClientModInitializer {
     }
 
     private static int help(FabricClientCommandSource src) {
-        src.sendFeedback(Component.literal("\u00a7b\u00a7lTrevor+ \u00a77commands   \u00a78(\u00a7f/tp\u00a78 or \u00a7f/trevorplus\u00a78 opens the menu)"));
+        src.sendFeedback(Component.literal("\u00a7b\u00a7l" + BuildFlags.NAME + " \u00a77commands   \u00a78(\u00a7f/tp\u00a78 or \u00a7f/trevorplus\u00a78 opens the menu)"));
         section(src, "Everyday");
         h(src, "ui", "open the settings menu and HUD editor");
         h(src, "welcome", "show the first-launch screen again");
@@ -940,13 +1080,16 @@ public class TrevorplusClient implements ClientModInitializer {
         h(src, "hud | hud2 | zone", "show or hide the quest / creature / zone panel");
         h(src, "hud pos <x> <y>", "move a panel (also hud2 pos, zone pos)");
         section(src, "Features");
-        h(src, "highlight | blocks | rings", "mob highlight / Theodolite blocks / dotted rings");
+        if (BuildFlags.ESP) h(src, "highlight | blocks | rings", "mob highlight / Theodolite blocks / dotted rings");
+        else h(src, "blocks | rings", "Theodolite blocks / dotted rings");
         h(src, "blocks filter", "only highlight blocks on the hint rings");
+        if (BuildFlags.ESP) h(src, "esp always|dim|visible", "mob box and blocks behind walls: always / faded / only in sight");
         h(src, "alerts [test] | alertmin <rarity>", "rarity banners and the lowest rarity that triggers them");
         h(src, "sound [test]", "sound cues on or off");
         h(src, "autohide [seconds]", "hide everything (and the warp key) after a while outside the Farming Islands");
         h(src, "shuriken on|off|learn|clear", "reminder and the Shuriken icon marker");
-        h(src, "autoaccept on|off", "accept Trevor's [YES] automatically");
+        h(src, "shuriken tier <rarity>", "switch the reminder on or off for one rarity");
+        h(src, "accept manual|click|auto", "how Trevor's [YES] is accepted: key / on-screen click / automatic");
         section(src, "Settings");
         h(src, "mult <1-3>", "Vincent multiplier");
         h(src, "name <username>", "your name, to recognise your Pelt Dye");
@@ -968,6 +1111,16 @@ public class TrevorplusClient implements ClientModInitializer {
         for (Area a : Area.values()) areas.append(a.name()).append(' ');
         src.sendFeedback(Component.literal(areas.toString().trim()));
         return 1;
+    }
+
+    private static int setAccept(FabricClientCommandSource src, AcceptMode m) {
+        settings.acceptMode = m.name();
+        saveSettings();
+        return say(src, "Quest accept: " + m.label + switch (m) {
+            case MANUAL -> ". Use the warp key or click [YES] in chat.";
+            case CLICK -> ". A button appears when Trevor offers a quest: left click to accept.";
+            case AUTO -> ". Trevor's [YES] is sent for you a quarter second after it appears.";
+        });
     }
 
     private static int setWarp(FabricClientCommandSource src, String areaName, String command) {
